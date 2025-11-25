@@ -144,6 +144,16 @@ class BankrollManager:
         """
         wins = sum(1 for _, won, _ in self.settled_bets if won)
         losses = sum(1 for _, won, _ in self.settled_bets if not won)
+        
+        # Calculate max drawdown
+        max_drawdown = 0
+        peak = self.initial_bankroll
+        for snap in self.snapshots:
+            if snap.total_bankroll < peak:
+                drawdown = ((peak - snap.total_bankroll) / peak) * 100
+                max_drawdown = max(max_drawdown, drawdown)
+            else:
+                peak = snap.total_bankroll
 
         return {
             "initial_bankroll": self.initial_bankroll,
@@ -156,7 +166,8 @@ class BankrollManager:
             "win_rate": self.get_win_rate(),
             "total_wagered": self.total_wagered,
             "average_bet_size": self.total_wagered / len(self.bets_placed) if self.bets_placed else 0,
-            "pending_bets": len(self.bets_placed) - len(self.settled_bets)
+            "pending_bets": len(self.bets_placed) - len(self.settled_bets),
+            "max_drawdown": max_drawdown
         }
 
     def get_performance_over_time(self) -> List[Dict[str, Any]]:

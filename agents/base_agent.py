@@ -1,6 +1,7 @@
 """Base agent class for all betting agents."""
 
 from enum import Enum
+import json
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
 from anthropic import Anthropic
@@ -74,8 +75,20 @@ class BaseAgent:
         self.wins = 0
         self.losses = 0
 
-        # Initialize Anthropic client
-        self.client = Anthropic(api_key=settings.ANTHROPIC_API_KEY)
+        # Initialize clients based on provider
+        self.provider = settings.LLM_PROVIDER
+        
+        if self.provider == "anthropic":
+            self.client = Anthropic(api_key=settings.ANTHROPIC_API_KEY)
+        elif self.provider == "gemini":
+            import google.generativeai as genai
+            genai.configure(api_key=settings.GEMINI_API_KEY)
+            self.model = genai.GenerativeModel('gemini-pro')
+        elif self.provider in ["openrouter", "groq"]:
+            from openai import OpenAI
+            base_url = "https://openrouter.ai/api/v1" if self.provider == "openrouter" else "https://api.groq.com/openai/v1"
+            api_key = settings.OPENROUTER_API_KEY if self.provider == "openrouter" else settings.GROQ_API_KEY
+            self.client = OpenAI(base_url=base_url, api_key=api_key)
 
     def analyze_game(self, game: Game, context: Dict[str, Any]) -> Optional[Bet]:
         """Analyze a game and return a betting decision.
@@ -90,27 +103,72 @@ class BaseAgent:
         raise NotImplementedError("Subclasses must implement analyze_game")
 
     def _call_claude(self, system_prompt: str, user_message: str) -> str:
-        """Make a call to Claude API.
+        """Wrapper for _call_llm to maintain backward compatibility."""
+        return self._call_llm(system_prompt, user_message)
+
+    def _call_llm(self, system_prompt: str, user_message: str) -> str:
+        """Make a call to the configured LLM provider.
 
         Args:
             system_prompt: System instructions
             user_message: User message/query
 
         Returns:
-            Claude's response
+            LLM's response
         """
+        # Mock mode check
+        if (self.provider == "anthropic" and not settings.ANTHROPIC_API_KEY) or \
+           (self.provider == "gemini" and not settings.GEMINI_API_KEY) or \
+           (self.provider == "openrouter" and not settings.OPENROUTER_API_KEY) or \
+           (self.provider == "groq" and not settings.GROQ_API_KEY):
+            
+            # Return a mock JSON response that agents can parse
+            import random
+            should_bet = random.choice([True, False])
+            mock_response = {
+                "should_bet": should_bet,
+                "bet_team": "Mock Team",
+                "bet_type": "moneyline",
+                "line": -110,
+                "edge": 0.05,
+                "confidence": 0.8,
+                "reasoning": "Mock reasoning: Random chance says " + ("bet" if should_bet else "pass"),
+                "stake_percentage": 0.01
+            }
+            return json.dumps(mock_response)
+
         try:
-            message = self.client.messages.create(
-                model="claude-sonnet-4-5-20250929",
-                max_tokens=2000,
-                system=system_prompt,
-                messages=[
-                    {"role": "user", "content": user_message}
-                ]
-            )
-            return message.content[0].text
+            if self.provider == "anthropic":
+                message = self.client.messages.create(
+                    model="claude-sonnet-4-5-20250929",
+                    max_tokens=2000,
+                    system=system_prompt,
+                    messages=[
+                        {"role": "user", "content": user_message}
+                    ]
+                )
+                return message.content[0].text
+            
+            elif self.provider == "gemini":
+                # Gemini doesn't have system prompts in the same way, usually prepended
+                full_prompt = f"{system_prompt}\n\nUser: {user_message}"
+                response = self.model.generate_content(full_prompt)
+                return response.text
+            
+            elif self.provider in ["openrouter", "groq"]:
+                model = "google/gemini-2.0-flash-001" if self.provider == "openrouter" else "llama3-8b-8192"
+                response = self.client.chat.completions.create(
+                    model=model,
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_message}
+                    ]
+                )
+                return response.choices[0].message.content
+                
         except Exception as e:
-            return f"Error calling Claude: {str(e)}"
+            print(f"Error calling LLM ({self.provider}): {str(e)}")
+            return "Error calling LLM. Defaulting to pass."
 
     def debate(self, topic: str, other_opinions: List[str]) -> str:
         """Participate in a debate about a betting decision.

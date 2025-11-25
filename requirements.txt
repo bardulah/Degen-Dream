@@ -10,9 +10,17 @@ python-dotenv>=1.0.0
 pandas>=2.0.0
 numpy>=1.24.0
 
+# Database
+sqlalchemy>=2.0.0
+psycopg2-binary>=2.9.0  # PostgreSQL driver
+
+# Authentication & Security
+pyjwt>=2.8.0
+bcrypt>=4.1.0
+python-multipart>=0.0.6
+
 # GUI & Visualization
-streamlit>=1.30.0
-pygame>=2.5.0
+streamlit>=1.28.0
 plotly>=5.18.0
 matplotlib>=3.8.0
 seaborn>=0.13.0
@@ -27,12 +35,30 @@ beautifulsoup4>=4.12.0
 selenium>=4.15.0
 lxml>=4.9.0
 
-# Utilities
+# API & Web
+fastapi>=0.104.0
+uvicorn>=0.24.0
 pydantic>=2.5.0
+
+# Utilities
 python-dateutil>=2.8.2
 pytz>=2023.3
+rich>=13.0.0
+schedule>=1.2.0
 
 # Monetization (optional)
 stripe>=7.0.0
-fastapi>=0.104.0
-uvicorn>=0.24.0
+pytest>=7.0.0
+google-generativeai>=0.3.0
+openai>=1.0.0
+playwright>=1.40.0
+pytest-playwright>=0.4.0
+
+# Text processing
+fuzzywuzzy
+python-Levenshtein
+
+# Legacy (consider removing)
+flask
+flask-socketio
+flask-cors

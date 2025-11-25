@@ -42,7 +42,7 @@ class OddsAPIClient:
         sport: str = "soccer_epl",
         regions: str = "eu",
         markets: str = "h2h,spreads,totals",
-        odds_format: str = "american"
+        odds_format: str = "decimal"
     ) -> List[Game]:
         """Get odds for a specific sport.
 
@@ -88,9 +88,10 @@ class OddsAPIClient:
         url = f"{self.base_url}/sports/{sport}/odds"
         params = {
             "apiKey": self.api_key,
-            "regions": "us",
+            "regions": "eu",
             "markets": "h2h,spreads,totals",
-            "bookmakers": "pinnacle"
+            "bookmakers": "pinnacle",
+            "oddsFormat": "decimal"
         }
 
         try:
@@ -164,13 +165,13 @@ class OddsAPIClient:
     def _get_team_odds(self, market: Optional[Dict], team: str) -> float:
         """Get odds for a specific team in h2h market."""
         if not market or "outcomes" not in market:
-            return -110  # Default
+            return 1.91  # Default decimal
 
         for outcome in market["outcomes"]:
             if outcome["name"] == team:
-                return outcome.get("price", -110)
+                return outcome.get("price", 1.91)
 
-        return -110
+        return 1.91
 
     def _get_spread(self, market: Optional[Dict], team: str) -> Optional[float]:
         """Get spread for a specific team."""
@@ -218,13 +219,13 @@ class OddsAPIClient:
                 sport="soccer_spain_la_liga",
                 commence_time=datetime.now().isoformat(),
                 bookmaker="draftkings",
-                home_odds=150,
-                away_odds=180,
+                home_odds=2.50,
+                away_odds=2.80,
                 home_spread=-1.5,
                 away_spread=1.5,
                 over_under=2.5,
-                over_odds=-115,
-                under_odds=-105
+                over_odds=1.87,
+                under_odds=1.95
             ),
             Game(
                 id="sample_002",
@@ -233,13 +234,13 @@ class OddsAPIClient:
                 sport="basketball_nba",
                 commence_time=datetime.now().isoformat(),
                 bookmaker="fanduel",
-                home_odds=-120,
-                away_odds=100,
+                home_odds=1.83,
+                away_odds=2.00,
                 home_spread=-3.5,
                 away_spread=3.5,
                 over_under=225.5,
-                over_odds=-110,
-                under_odds=-110
+                over_odds=1.91,
+                under_odds=1.91
             ),
             Game(
                 id="sample_003",
@@ -248,12 +249,12 @@ class OddsAPIClient:
                 sport="soccer_slovakia_super_liga",
                 commence_time=datetime.now().isoformat(),
                 bookmaker="nike",
-                home_odds=-150,
-                away_odds=350,
+                home_odds=1.66,
+                away_odds=4.50,
                 home_spread=-1.5,
                 away_spread=1.5,
                 over_under=2.5,
-                over_odds=105,
-                under_odds=-125
+                over_odds=2.05,
+                under_odds=1.80
             )
         ]

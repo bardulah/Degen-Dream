@@ -5,6 +5,7 @@ from typing import List, Dict, Any, Optional
 from bs4 import BeautifulSoup
 from datetime import datetime
 import random
+from agents.base_agent import Game
 
 
 class NikeScraper:
@@ -18,22 +19,103 @@ class NikeScraper:
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
         })
 
-    def get_odds(self, sport: str = "futbal") -> List[Dict[str, Any]]:
-        """Scrape odds from Niké.
 
+    def get_odds(self, sport: str = "soccer") -> List[Game]:
+        """Scrape odds from Nike.sk
+        
         Args:
-            sport: Sport to scrape (futbal, hokej, etc.)
-
+            sport: Sport to get odds for (default: soccer)
+            
         Returns:
-            List of games with odds
+            List of Game objects with odds
         """
-        # NOTE: This is a placeholder implementation
-        # Real scraping would require handling JavaScript, authentication, etc.
-        # For demo purposes, we return simulated "leaked" data
-
-        print("⚠️  Niké scraper: Using simulated data (real scraping requires JS handling)")
-
-        return self._get_simulated_nike_data()
+        try:
+            from playwright.sync_api import sync_playwright
+            
+            with sync_playwright() as p:
+                browser = p.chromium.launch(headless=True)
+                page = browser.new_page()
+                
+                # Navigate to the football betting page
+                page.goto('https://www.nike.sk/tipovanie/futbal', timeout=30000)
+                
+                # Handle cookie consent if present
+                try:
+                    page.get_by_text('Povoliť všetko').click(timeout=5000)
+                except Exception:
+                    pass  # Cookie banner not present or already accepted
+                
+                # Wait for the main content to load
+                page.wait_for_selector('div.native-scroll', timeout=15000)
+                
+                games = []
+                
+                # Find all game rows
+                game_rows = page.locator('div.bet-view-prematch-row').all()
+                
+                for row in game_rows:
+                    try:
+                        # Extract team names from the opponents button
+                        opponents_btn = row.locator('button.bets-opponents').first
+                        if opponents_btn.count() == 0:
+                            continue
+                        
+                        # Get team divs within the button
+                        team_divs = opponents_btn.locator('div').all()
+                        if len(team_divs) < 2:
+                            continue
+                        
+                        # First and last divs are the teams (middle is 'vs')
+                        home_team = team_divs[0].inner_text().strip()
+                        away_team = team_divs[-1].inner_text().strip()
+                        
+                        if not home_team or not away_team:
+                            continue
+                        
+                        # Extract odds - look for bet-box links with odds
+                        odd_elements = row.locator('a.bet-box span[data-atid="n1-bet-odd"]').all()
+                        
+                        if len(odd_elements) < 3:
+                            continue
+                        
+                        # Get the first 3 odds (1, X, 2)
+                        try:
+                            home_odds = float(odd_elements[0].inner_text().strip())
+                            draw_odds = float(odd_elements[1].inner_text().strip())
+                            away_odds = float(odd_elements[2].inner_text().strip())
+                        except (ValueError, IndexError):
+                            continue
+                        
+                        # Extract match ID from data attributes if available
+                        match_id_attr = row.locator('.bet-table-left').first.get_attribute('data-match-id')
+                        match_id = match_id_attr if match_id_attr else f"nike_{len(games)}"
+                        
+                        # Create Game object using the base_agent.Game structure
+                        game = Game(
+                            id=match_id,
+                            home_team=home_team,
+                            away_team=away_team,
+                            sport="soccer",
+                            commence_time=datetime.now().isoformat(),
+                            bookmaker="nike_sk",
+                            home_odds=home_odds,
+                            away_odds=away_odds
+                        )
+                        
+                        games.append(game)
+                        
+                    except Exception as e:
+                        # Skip games that fail to parse
+                        continue
+                
+                browser.close()
+                
+                print(f"Successfully scraped {len(games)} games from Nike.sk")
+                return games
+                
+        except Exception as e:
+            print(f"Error scraping Nike.sk: {e}")
+            return []
 
     def _get_simulated_nike_data(self) -> List[Dict[str, Any]]:
         """Generate simulated Niké betting data with "insider" info.

@@ -12,8 +12,15 @@ class Settings:
 
     # API Keys
     ANTHROPIC_API_KEY: str = os.getenv("ANTHROPIC_API_KEY", "")
+    GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
+    OPENROUTER_API_KEY: str = os.getenv("OPENROUTER_API_KEY", "")
+    GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "")
     ODDS_API_KEY: str = os.getenv("ODDS_API_KEY", "")
     STRIPE_API_KEY: str = os.getenv("STRIPE_API_KEY", "")
+
+    # LLM Provider
+    LLM_PROVIDER: str = os.getenv("LLM_PROVIDER", "anthropic").lower()
+
 
     # Agent Configuration
     NUM_SHARPS: int = int(os.getenv("NUM_SHARPS", "3"))
@@ -71,8 +78,8 @@ class Settings:
     @classmethod
     def validate(cls) -> bool:
         """Validate required settings."""
-        if not cls.ANTHROPIC_API_KEY:
-            raise ValueError("ANTHROPIC_API_KEY is required")
+        # if not cls.ANTHROPIC_API_KEY:
+        #     print("⚠️  WARNING: ANTHROPIC_API_KEY not found. Running in mock mode.")
         return True
 
 

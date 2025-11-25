@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎰 Bratislava Betting Syndicate</title>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0a0e27 0%, #1a1f3a 100%);
+            color: #ffffff;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        /* Header */
+        .header {
+            text-align: center;
+            padding: 20px 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 40px rgba(102, 126, 234, 0.3);
+            position: relative;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            text-shadow: 0 0 20px rgba(255, 255, 255, 0.5);
+        }
+
+        .status-badge {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            font-weight: bold;
+        }
+
+        .status-connected {
+            background: #4ade80;
+            color: #0a0e27;
+        }
+
+        .status-disconnected {
+            background: #ef4444;
+            color: white;
+        }
+
+        /* Controls */
+        .controls {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 30px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 40px;
+            border: none;
+            border-radius: 30px;
+            font-size: 1.2em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        .btn-primary:hover {
+            transform: scale(1.05);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.6);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Game Card */
+        .game-card {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 30px;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+
+        .teams {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 40px;
+            margin: 20px 0;
+        }
+
+        .team-name {
+            font-size: 2em;
+            font-weight: bold;
+        }
+
+        .vs {
+            font-size: 1.2em;
+            color: #667eea;
+            font-weight: bold;
+        }
+
+        .odds-display {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .odd-item {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 10px 20px;
+            border-radius: 10px;
+            min-width: 100px;
+        }
+
+        .odd-label {
+            font-size: 0.8em;
+            opacity: 0.7;
+        }
+
+        .odd-val {
+            font-size: 1.4em;
+            color: #4ade80;
+            font-weight: bold;
+        }
+
+        /* Agent Grid */
+        .agent-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .agent-card {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 15px;
+            padding: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .agent-card.active {
+            border-color: #667eea;
+            box-shadow: 0 0 20px rgba(102, 126, 234, 0.2);
+        }
+
+        .agent-header {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
+        .agent-avatar {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.8em;
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        /* Agent Colors */
+        .type-sharp .agent-avatar {
+            background: linear-gradient(135deg, #22d3ee, #0891b2);
+        }
+
+        .type-insider .agent-avatar {
+            background: linear-gradient(135deg, #fbbf24, #f59e0b);
+        }
+
+        .type-degen .agent-avatar {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+        }
+
+        .type-bookie .agent-avatar {
+            background: linear-gradient(135deg, #4ade80, #22c55e);
+        }
+
+        .agent-info h3 {
+            font-size: 1.1em;
+            margin-bottom: 2px;
+        }
+
+        .agent-role {
+            font-size: 0.8em;
+            opacity: 0.7;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .agent-thought {
+            font-size: 0.9em;
+            line-height: 1.5;
+            color: rgba(255, 255, 255, 0.8);
+            min-height: 60px;
+            margin-bottom: 15px;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+        }
+
+        .agent-decision {
+            display: none;
+            /* Hidden by default until decision made */
+            background: rgba(74, 222, 128, 0.1);
+            border: 1px solid #4ade80;
+            padding: 10px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .decision-type {
+            font-weight: bold;
+            color: #4ade80;
+        }
+
+        .decision-stake {
+            font-size: 0.9em;
+            margin-top: 5px;
+        }
+
+        /* Consensus Section */
+        .consensus-section {
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+            border: 2px solid #667eea;
+            border-radius: 20px;
+            padding: 30px;
+            text-align: center;
+            margin-top: 40px;
+            display: none;
+            /* Hidden until consensus reached */
+        }
+
+        .consensus-title {
+            font-size: 1.5em;
+            margin-bottom: 20px;
+            color: #667eea;
+        }
+
+        .final-bet {
+            font-size: 2em;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .bet-result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 10px;
+            font-size: 1.5em;
+            font-weight: bold;
+        }
+
+        .result-win {
+            background: #4ade80;
+            color: #0a0e27;
+        }
+
+        .result-loss {
+            background: #ef4444;
+            color: white;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="status-badge" id="status-badge">● Connecting...</div>
+            <h1>🎰 Bratislava Betting Syndicate</h1>
+        </div>
+
+        <div class="controls">
+            <button class="btn-primary" id="start-btn" onclick="startSimulation()">
+                🎲 Analyze Next Game
+            </button>
+        </div>
+
+        <!-- Game Display -->
+        <div id="game-display" style="display: none;">
+            <div class="game-card">
+                <div style="opacity: 0.7; margin-bottom: 10px;" id="game-meta">Premier League • Nike.sk</div>
+                <div class="teams">
+                    <div class="team-name" id="home-team">Home Team</div>
+                    <div class="vs">VS</div>
+                    <div class="team-name" id="away-team">Away Team</div>
+                </div>
+                <div class="odds-display">
+                    <div class="odd-item">
+                        <div class="odd-label">Home</div>
+                        <div class="odd-val" id="home-odds">-</div>
+                    </div>
+                    <div class="odd-item">
+                        <div class="odd-label">Away</div>
+                        <div class="odd-val" id="away-odds">-</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Agents Grid -->
+            <div class="agent-grid" id="agent-grid">
+                <!-- Agents will be populated here -->
+            </div>
+
+            <!-- Consensus -->
+            <div class="consensus-section" id="consensus-section">
+                <div class="consensus-title">🏛️ Syndicate Decision</div>
+                <div class="final-bet" id="final-bet-display">--</div>
+                <div id="bet-result-display"></div>
+            </div>
+        </div>
+
+        <div id="placeholder-msg" style="text-align: center; opacity: 0.5; margin-top: 50px;">
+            Click "Analyze Next Game" to start the simulation.
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+
+        // Agent Configuration
+        const agents = [
+            { id: 'Viktor', type: 'sharp', icon: '📊' },
+            { id: 'Elena', type: 'sharp', icon: '📊' },
+            { id: 'Boris', type: 'sharp', icon: '📊' },
+            { id: 'Nikolai', type: 'insider', icon: '🕵️' },
+            { id: 'Petra', type: 'insider', icon: '🕵️' },
+            { id: 'Jozef', type: 'degen', icon: '🎲' },
+            { id: 'Marian', type: 'degen', icon: '🎲' },
+            { id: 'Lucia', type: 'degen', icon: '🎲' },
+            { id: 'Tomáš', type: 'bookie', icon: '💰' },
+            { id: 'Katarína', type: 'bookie', icon: '💰' }
+        ];
+
+        function initGrid() {
+            const grid = document.getElementById('agent-grid');
+            grid.innerHTML = '';
+            agents.forEach(agent => {
+                const card = document.createElement('div');
+                card.className = `agent-card type-${agent.type}`;
+                card.id = `card-${agent.id}`;
+                card.innerHTML = `
+                    <div class="agent-header">
+                        <div class="agent-avatar">${agent.icon}</div>
+                        <div class="agent-info">
+                            <h3>${agent.id}</h3>
+                            <div class="agent-role">${agent.type}</div>
+                        </div>
+                    </div>
+                    <div class="agent-thought" id="thought-${agent.id}">Waiting...</div>
+                    <div class="agent-decision" id="decision-${agent.id}"></div>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        // Socket Handlers
+        socket.on('connect', () => {
+            document.getElementById('status-badge').className = 'status-badge status-connected';
+            document.getElementById('status-badge').textContent = '● Connected';
+        });
+
+        socket.on('disconnect', () => {
+            document.getElementById('status-badge').className = 'status-badge status-disconnected';
+            document.getElementById('status-badge').textContent = '● Disconnected';
+        });
+
+        socket.on('new_game', (game) => {
+            // Reset UI
+            document.getElementById('placeholder-msg').style.display = 'none';
+            document.getElementById('game-display').style.display = 'block';
+            document.getElementById('consensus-section').style.display = 'none';
+            document.getElementById('bet-result-display').className = '';
+            document.getElementById('bet-result-display').textContent = '';
+            initGrid();
+
+            // Update Game Info
+            document.getElementById('home-team').textContent = game.home_team;
+            document.getElementById('away-team').textContent = game.away_team;
+            document.getElementById('home-odds').textContent = game.home_odds;
+            document.getElementById('away-odds').textContent = game.away_odds;
+            document.getElementById('game-meta').textContent = `${game.sport} • ${game.bookmaker}`;
+        });
+
+        socket.on('agent_message', (data) => {
+            const card = document.getElementById(`card-${data.agent_name}`);
+            const thought = document.getElementById(`thought-${data.agent_name}`);
+            const decision = document.getElementById(`decision-${data.agent_name}`);
+
+            if (card && thought) {
+                // Highlight active agent
+                document.querySelectorAll('.agent-card').forEach(c => c.classList.remove('active'));
+                card.classList.add('active');
+
+                // Update thought
+                thought.textContent = data.response;
+
+                // Show decision if available
+                if (data.decision) {
+                    decision.style.display = 'block';
+                    decision.innerHTML = `
+                        <div class="decision-type">${data.decision.bet_type.toUpperCase()}</div>
+                        <div class="decision-stake">Stake: €${data.decision.stake.toFixed(2)} (${(data.decision.confidence * 100).toFixed(0)}%)</div>
+                    `;
+                }
+            }
+        });
+
+        socket.on('new_bet', (bet) => {
+            // This is the consensus bet
+            const consensus = document.getElementById('consensus-section');
+            const display = document.getElementById('final-bet-display');
+
+            consensus.style.display = 'block';
+            display.textContent = `✅ ${bet.agent} bets on ${bet.team} (${bet.bet_type})`;
+
+            // Scroll to bottom
+            consensus.scrollIntoView({ behavior: 'smooth' });
+        });
+
+        socket.on('notification', (data) => {
+            if (data.message.includes("WON") || data.message.includes("LOST")) {
+                const resultDisplay = document.getElementById('bet-result-display');
+                resultDisplay.textContent = data.message;
+                resultDisplay.className = `bet-result ${data.message.includes("WON") ? 'result-win' : 'result-loss'}`;
+
+                // Re-enable button
+                const btn = document.getElementById('start-btn');
+                btn.disabled = false;
+                btn.innerHTML = '🎲 Analyze Next Game';
+            }
+        });
+
+        function startSimulation() {
+            const btn = document.getElementById('start-btn');
+            btn.disabled = true;
+            btn.innerHTML = '🎲 Analyzing...';
+
+            socket.emit('start_simulation', { num_games: 1 });
+        }
+    </script>
+</body>
+
+</html>

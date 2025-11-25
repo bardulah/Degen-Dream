@@ -94,20 +94,23 @@ Respond in JSON:
                 "stay_away": "⚠️"
             }.get(analysis.get("strategy", "fade_public"), "📊")
 
+            # Ensure line is numeric
+            line = float(analysis.get("line", -110))
+            confidence = float(analysis.get("confidence", 0.6))
+            
             return Bet(
                 game_id=game.id,
                 team=analysis["bet_team"],
                 bet_type=analysis["bet_type"],
-                line=analysis["line"],
-                odds=self._american_to_decimal(analysis["line"]),
+                line=line,
+                odds=self._american_to_decimal(line),
                 stake=stake,
-                confidence=analysis["confidence"],
+                confidence=confidence,
                 reasoning=f"{strategy_emoji} BOOKIE PLAY: {analysis['reasoning']}",
                 agent_name=self.name
             )
 
         except Exception as e:
-            print(f"Error analyzing game for {self.name}: {e}")
             return None
 
     def predict_line_movement(self, game: Game, current_line: float) -> Dict[str, Any]:
