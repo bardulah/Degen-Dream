@@ -43,6 +43,7 @@ You bet based on:
 - "Due for a win" logic
 - Parlays and long shots
 - Complete randomness
+- BUT ALSO: You check team news (for inspiration, not logic)
 
 You YOLO into bets. You trust your gut over statistics. You love underdogs and overs.
 You're here for the thrill, not the math. BE CHAOTIC."""
@@ -50,10 +51,13 @@ You're here for the thrill, not the math. BE CHAOTIC."""
         game_info = self._format_game_info(game)
         moon_phase = random.choice(["waxing", "waning", "full", "new"])
         lucky_number = random.randint(1, 99)
+        real_time_data = context.get("real_time_data", "")
 
         user_message = f"""Game:
 
 {game_info}
+
+{f"TEAM VIBES (for inspiration):{chr(10)}{real_time_data}" if real_time_data else ""}
 
 Today's moon phase: {moon_phase}
 Your lucky number today: {lucky_number}
@@ -82,12 +86,21 @@ YOLO it!"""
             # Degens bet aggressively
             stake = self._calculate_degen_stake(analysis.get("stake_percentage", 0.05))
 
+            # Get actual odds from the game
+            bet_team = analysis["bet_team"]
+            if analysis["bet_type"].lower() == "total":
+                odds = game.over_odds if "Over" in bet_team else game.under_odds
+                if not odds:
+                    odds = game.home_odds  # Fallback to moneyline
+            else:
+                odds = game.home_odds if bet_team == game.home_team else game.away_odds
+
             return Bet(
                 game_id=game.id,
                 team=analysis["bet_team"],
                 bet_type=analysis["bet_type"],
                 line=analysis.get("line", -110),
-                odds=self._american_to_decimal(analysis.get("line", -110)),
+                odds=odds,
                 stake=stake,
                 confidence=analysis.get("confidence", 0.95),  # Degens are always confident
                 reasoning=f"🎲 DEGEN ENERGY: {analysis.get('vibe_check', 'just feels right')}",

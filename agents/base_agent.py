@@ -41,8 +41,10 @@ class Game:
     bookmaker: str
     home_odds: float
     away_odds: float
+    league: Optional[str] = None  # League/tournament name
     home_spread: Optional[float] = None
     away_spread: Optional[float] = None
+    draw_odds: Optional[float] = None  # For 3-way (home/draw/away)
     over_under: Optional[float] = None
     over_odds: Optional[float] = None
     under_odds: Optional[float] = None
@@ -101,6 +103,51 @@ class BaseAgent:
             Bet object if agent wants to bet, None otherwise
         """
         raise NotImplementedError("Subclasses must implement analyze_game")
+    
+    def create_parlay(self, all_bets: List[Bet], min_legs: int = 2, max_legs: int = 5) -> Optional[Dict[str, Any]]:
+        """Create a parlay from all bets this agent has made.
+        
+        Args:
+            all_bets: All bets this agent made across all games
+            min_legs: Minimum legs in parlay
+            max_legs: Maximum legs in parlay
+        
+        Returns:
+            Parlay dict with odds, stake, confidence, reasoning or None if not enough bets
+        """
+        if not all_bets or len(all_bets) < min_legs:
+            return None
+        
+        # Sort by confidence descending
+        sorted_bets = sorted(all_bets, key=lambda b: b.confidence, reverse=True)
+        
+        # Take top bets up to max_legs
+        parlay_bets = sorted_bets[:max_legs]
+        
+        # Calculate parlay odds (multiply all odds)
+        parlay_odds = 1.0
+        for bet in parlay_bets:
+            parlay_odds *= bet.odds
+        
+        # Average confidence
+        avg_confidence = sum(b.confidence for b in parlay_bets) / len(parlay_bets)
+        
+        # Suggest stake as percentage of bankroll (aggressive for parlay)
+        parlay_stake = self.bankroll * 0.03  # 3% of bankroll for parlay
+        
+        # Reasoning: list the picks
+        reasoning = ", ".join([f"{b.team} ({b.odds:.2f})" for b in parlay_bets])
+        
+        return {
+            "agent_name": self.name,
+            "agent_type": self.agent_type.value,
+            "legs": len(parlay_bets),
+            "bets": parlay_bets,
+            "odds": parlay_odds,
+            "stake": parlay_stake,
+            "confidence": avg_confidence,
+            "reasoning": reasoning
+        }
 
     def _call_claude(self, system_prompt: str, user_message: str) -> str:
         """Wrapper for _call_llm to maintain backward compatibility."""

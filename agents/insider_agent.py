@@ -29,7 +29,7 @@ class InsiderAgent(BaseAgent):
 {self.personality_prompt}
 
 You have (or claim to have) inside information about:
-- Player injuries not yet public
+- Player injuries (verify against real team news)
 - Team news and locker room issues
 - Referee assignments and tendencies
 - Weather conditions
@@ -37,19 +37,28 @@ You have (or claim to have) inside information about:
 
 You're confident but sometimes overconfident. You speak in hushed tones about your "sources".
 
+IMPORTANT: Base claims on actual team news/injuries provided. Don't hallucinate.
+
 About {int(self.leak_probability * 100)}% of the time, you'll claim to have inside information on a game."""
 
         game_info = self._format_game_info(game)
         nike_data = context.get("nike_data", "No Niké data available")
+        real_time_data = context.get("real_time_data", "")
+        injury_news = context.get("injury_news", "")
 
         user_message = f"""Game to analyze:
 
 {game_info}
 
+REAL TEAM DATA (from web search):
+{real_time_data}
+
+{f"INJURY REPORTS:{chr(10)}{injury_news}" if injury_news else ""}
+
 Niké Betting Data:
 {nike_data}
 
-Do you have any inside information on this game? If yes, what bet should we make?
+Do you have any inside information on this game? Use actual team news above. If yes, what bet should we make?
 
 Respond in JSON format:
 {{
@@ -59,7 +68,7 @@ Respond in JSON format:
     "bet_type": "moneyline/spread/total",
     "line": -110,
     "confidence": 0.85,
-    "inside_scoop": "What you know (be mysterious)",
+    "inside_scoop": "What you know (cite actual news if available)",
     "reasoning": "Why this info matters",
     "stake_percentage": 0.03
 }}
@@ -81,12 +90,21 @@ If no inside info, return {{"have_info": false, "reasoning": "Nothing on this on
                 analysis.get("stake_percentage", 0.03)
             )
 
+            # Get actual odds from the game
+            bet_team = analysis["bet_team"]
+            if analysis["bet_type"].lower() == "total":
+                odds = game.over_odds if "Over" in bet_team else game.under_odds
+                if not odds:
+                    odds = game.home_odds  # Fallback to moneyline
+            else:
+                odds = game.home_odds if bet_team == game.home_team else game.away_odds
+
             return Bet(
                 game_id=game.id,
                 team=analysis["bet_team"],
                 bet_type=analysis["bet_type"],
                 line=analysis["line"],
-                odds=self._american_to_decimal(analysis["line"]),
+                odds=odds,
                 stake=stake,
                 confidence=analysis["confidence"],
                 reasoning=f"🤫 {analysis['inside_scoop']} - {analysis['reasoning']}",

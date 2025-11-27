@@ -18,6 +18,8 @@ from database.schema import init_db, SessionLocal, User, Simulation
 from database.auth import auth_manager, UserTier
 from monitoring.logger import logger
 from notification.email_sender import EmailSender
+from notification.discord_notifier import DiscordNotifier
+import asyncio
 
 
 def main(
@@ -26,7 +28,10 @@ def main(
     use_sample_data: bool = True,
     use_aggregator: bool = False,
     use_daily_fetcher: bool = False,
-    show_live: bool = True
+    show_live: bool = True,
+    filter_sports: Optional[List[str]] = None,
+    filter_leagues: Optional[List[str]] = None,
+    max_per_sport: Optional[int] = None
 ):
     """Run the Bratislava Betting Syndicate simulation.
 
@@ -37,9 +42,15 @@ def main(
         use_aggregator: Use multi-source odds aggregator
         use_daily_fetcher: Use daily fetcher for today's top leagues
         show_live: Show live agent thinking and decisions
+        filter_sports: Only analyze these sports
+        filter_leagues: Only analyze these leagues
+        max_per_sport: Maximum games per sport
     """
     # Initialize monitor
     monitor = AgentMonitor() if show_live else None
+    
+    # Initialize Discord notifier
+    discord_notifier = DiscordNotifier()
     
     if monitor:
         monitor.show_header()
@@ -50,7 +61,11 @@ def main(
     ║   Multi-Agent AI Betting Simulation                       ║
     ║   Powered by LangGraph + Claude Sonnet 4.5                ║
     ╚═══════════════════════════════════════════════════════════╝
-        """)
+    """)
+    
+    if discord_notifier.enabled:
+        print("📢 Discord notifications enabled")
+        asyncio.run(discord_notifier.on_simulation_start(num_games, sport))
 
     # Validate settings
     try:
@@ -90,12 +105,15 @@ def main(
     games = []
     
     if use_daily_fetcher:
-        # Use daily fetcher for today's top leagues
-        fetcher = DailyOddsFetcher(use_nike=True, use_odds_api=True)
-        games_by_sport = fetcher.get_todays_games(
-            sports=['soccer', 'basketball', 'hockey', 'tennis'],
-            hours_ahead=24
+        # Use daily fetcher for today's available games (all sports from Nike.sk)
+        fetcher = DailyOddsFetcher(
+            use_nike=True,
+            use_odds_api=True,
+            filter_sports=filter_sports,
+            filter_leagues=filter_leagues,
+            max_per_sport=max_per_sport
         )
+        games_by_sport = fetcher.get_todays_games(hours_ahead=24)
         # Flatten all games into one list
         for sport_games in games_by_sport.values():
             games.extend(sport_games)
@@ -123,6 +141,7 @@ def main(
             else:
                 print("   Using sample data (no API calls)")
             games = odds_client.get_sample_games()
+            sport = "demo"  # Set sport to demo for sample data
         else:
             if monitor:
                 monitor.log_event("INFO", f"Fetching live odds for {sport}")
@@ -172,7 +191,8 @@ def main(
         user_id=user.id,
         simulation_id=simulation_id,
         sport=sport,
-        use_live_data=not use_sample_data
+        use_live_data=not use_sample_data,
+        notifier=discord_notifier  # Pass Discord notifier
     )
 
     # Save user email before closing DB
@@ -202,6 +222,13 @@ def main(
         print(f"      Win Rate: {agent['win_rate']:.1f}% | Bets: {agent['total_bets']}")
         print()
 
+    # Notify Discord of completion
+    if discord_notifier.enabled:
+        asyncio.run(discord_notifier.on_simulation_complete(
+            num_games=num_games,
+            total_wagered=results.get("total_wagered", 0)
+        ))
+    
     # Send email report if configured
     email_sender = EmailSender()
     if email_sender.enabled:
@@ -260,8 +287,45 @@ if __name__ == "__main__":
         action="store_true",
         help="Disable live agent monitoring (classic mode)"
     )
+    parser.add_argument(
+        "--sports",
+        type=str,
+        default=None,
+        help="Comma-separated sports to analyze (e.g., 'soccer,basketball,hockey')"
+    )
+    parser.add_argument(
+        "--leagues",
+        type=str,
+        default=None,
+        help="Comma-separated leagues to analyze (e.g., 'premier_league,la_liga,nba')"
+    )
+    parser.add_argument(
+        "--max-per-sport",
+        type=int,
+        default=None,
+        help="Maximum games per sport (e.g., 5)"
+    )
+    parser.add_argument(
+        "--show-leagues",
+        action="store_true",
+        help="Show available leagues and exit"
+    )
 
     args = parser.parse_args()
+    
+    # Handle --show-leagues
+    if args.show_leagues:
+        import sys
+        from data.daily_odds_fetcher import DailyOddsFetcher
+        fetcher = DailyOddsFetcher(use_nike=True, use_odds_api=False)
+        print("\n📊 AVAILABLE LEAGUES BY SPORT\n" + "=" * 70)
+        leagues = fetcher.get_available_leagues()
+        for sport, league_set in sorted(leagues.items()):
+            print(f"\n{sport.upper()}:")
+            for league in sorted(league_set):
+                print(f"  • {league}")
+        print("\n" + "=" * 70)
+        sys.exit(0)
 
     main(
         num_games=args.games,
@@ -269,5 +333,8 @@ if __name__ == "__main__":
         use_sample_data=args.sample,
         use_aggregator=args.aggregator,
         use_daily_fetcher=args.daily,
-        show_live=not args.no_live
+        show_live=not args.no_live,
+        filter_sports=args.sports.split(',') if args.sports else None,
+        filter_leagues=args.leagues.split(',') if args.leagues else None,
+        max_per_sport=args.max_per_sport
     )

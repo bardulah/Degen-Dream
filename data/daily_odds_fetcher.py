@@ -1,116 +1,217 @@
-"""Daily odds fetcher with date and league filtering."""
+"""Daily odds fetcher - fetch what's actually available today."""
 
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
 from agents.base_agent import Game
-from data.odds_api import OddsAPIClient
+from data.odds_api_client import OddsAPIClientV2
 from data.scrapers import NikeScraper
-from data.odds_aggregator import OddsAggregator
 from config.settings import settings
 
 
-# Top leagues by sport
-TOP_LEAGUES = {
-    "soccer": [
-        "soccer_epl",           # English Premier League
-        "soccer_spain_la_liga", # Spanish La Liga
-        "soccer_germany_bundesliga",  # German Bundesliga
-        "soccer_italy_serie_a", # Italian Serie A
-        "soccer_france_ligue_1", # French Ligue 1
-    ],
-    "basketball": [
-        "basketball_nba",       # NBA
-        "basketball_euroleague", # EuroLeague
-    ],
-    "hockey": [
-        "hockey_nhl",           # NHL
-    ],
-    "tennis": [
-        "tennis_atp",           # ATP
-        "tennis_wta",           # WTA
-    ]
-}
-
-
 class DailyOddsFetcher:
-    """Fetch odds for today's matchups from top leagues only."""
+    """Fetch odds for today's matchups - with sport/league/count filtering."""
     
-    def __init__(self, use_nike: bool = True, use_odds_api: bool = True):
+    def __init__(
+        self,
+        use_nike: bool = True,
+        use_odds_api: bool = False,
+        filter_sports: Optional[List[str]] = None,
+        filter_leagues: Optional[List[str]] = None,
+        max_per_sport: Optional[int] = None
+    ):
         """Initialize daily odds fetcher.
         
         Args:
-            use_nike: Use Nike.sk scraper (good for soccer)
-            use_odds_api: Use TheOddsAPI (good for multiple sports)
+            use_nike: Use Nike.sk scraper
+            use_odds_api: Use TheOddsAPI
+            filter_sports: Only include these sports (e.g., ['soccer', 'basketball'])
+            filter_leagues: Only include these leagues (e.g., ['premier_league', 'la_liga'])
+            max_per_sport: Limit games per sport (e.g., 5 games per sport max)
         """
         self.use_nike = use_nike
         self.use_odds_api = use_odds_api
         self.nike_scraper = NikeScraper() if use_nike else None
-        self.odds_api = OddsAPIClient() if use_odds_api and settings.ODDS_API_KEY else None
+        self.odds_api = OddsAPIClientV2() if use_odds_api and settings.ODDS_API_KEY else None
+        
+        # Filtering options
+        self.filter_sports = filter_sports
+        self.filter_leagues = filter_leagues
+        self.max_per_sport = max_per_sport
     
     def get_todays_games(
         self,
-        sports: Optional[List[str]] = None,
         hours_ahead: int = 24
     ) -> Dict[str, List[Game]]:
-        """Get today's games for specified sports.
+        """Get today's games by fetching what's actually available.
+        
+        Strategy:
+        1. Nike.sk for all available sports (most reliable)
+        2. OddsAPI - try all available sports, only keep games with matches today
+        3. Merge results, deduplicate
         
         Args:
-            sports: List of sports ('soccer', 'basketball', 'hockey', 'tennis')
-                    If None, fetches all
-            hours_ahead: How many hours ahead to look (default: 24 = today + tomorrow)
+            hours_ahead: How many hours ahead to look
         
         Returns:
             Dict mapping sport name to list of games
         """
-        if sports is None:
-            sports = list(TOP_LEAGUES.keys())
-        
         results = {}
         now = datetime.utcnow()
         
-        for sport in sports:
-            print(f"\n📅 Fetching {sport.upper()} for today...")
-            
-            games = []
-            
-            # Nike scraper - primarily for soccer
-            if self.use_nike and sport == "soccer":
-                try:
-                    nike_games = self.nike_scraper.get_odds("soccer")
-                    # Filter to today's games
+        # Nike.sk for all available sports (most reliable)
+        if self.use_nike:
+            try:
+                print("\n📅 Fetching from Nike.sk (All Sports)...")
+                nike_games_by_sport = self.nike_scraper.get_all_sports()
+                
+                for sport, nike_games in nike_games_by_sport.items():
                     nike_games = self._filter_by_date(nike_games, now, hours_ahead)
-                    games.extend(nike_games)
-                    print(f"  ✓ Nike.sk: {len(nike_games)} games")
-                except Exception as e:
-                    print(f"  ✗ Nike.sk failed: {e}")
-            
-            # OddsAPI - for all sports
-            if self.use_odds_api:
-                try:
-                    for league_key in TOP_LEAGUES.get(sport, []):
-                        api_games = self.odds_api.get_odds(sport=league_key)
-                        # Filter to today's games
-                        api_games = self._filter_by_date(api_games, now, hours_ahead)
-                        games.extend(api_games)
                     
-                    # Deduplicate
-                    games = self._deduplicate_games(games)
-                    print(f"  ✓ OddsAPI: {len(games)} games")
-                except Exception as e:
-                    print(f"  ✗ OddsAPI failed: {e}")
-            
-            if games:
-                results[sport] = games
-            else:
-                print(f"  ⚠ No games found for {sport}")
+                    if nike_games:
+                        if sport in results:
+                            # Merge with existing
+                            all_games = results[sport] + nike_games
+                            results[sport] = self._deduplicate_games(all_games)
+                        else:
+                            results[sport] = self._deduplicate_games(nike_games)
+                
+                # Print Nike summary
+                nike_total = sum(len(g) for g in results.values())
+                if nike_total > 0:
+                    print(f"  📦 Nike.sk Total: {nike_total} games")
+            except Exception as e:
+                print(f"  ⚠️  Nike.sk failed: {str(e)[:50]}")
         
-        # Print summary
-        print("\n" + "=" * 60)
+        # OddsAPI - fetch all available sports and keep only games with matches today
+        if self.use_odds_api and self.odds_api:
+            print("\n📅 Fetching from TheOddsAPI (All Available Sports)...")
+            
+            try:
+                # Get all available sports
+                available_sports = self.odds_api.get_available_sports_with_games(hours_ahead=hours_ahead)
+                
+                if not available_sports:
+                    print("  ⚠️  No sports with games found today")
+                else:
+                    print(f"  📊 Found {len(available_sports)} sports with games today")
+                    
+                    # Fetch odds for each sport with games
+                    for sport_key in available_sports:
+                        try:
+                            games = self.odds_api.get_odds_for_sport(sport_key, hours_ahead=hours_ahead)
+                            
+                            if games:
+                                # Map sport key to generic sport name
+                                sport_name = self._map_sport_key_to_name(sport_key)
+                                
+                                # Merge with existing results (dedup across sources)
+                                if sport_name in results:
+                                    all_games = results[sport_name] + games
+                                    results[sport_name] = self._deduplicate_games(all_games)
+                                else:
+                                    results[sport_name] = self._deduplicate_games(games)
+                                
+                                print(f"  ✅ {sport_key}: {len(games)} games")
+                        except Exception as e:
+                            print(f"  ⚠️  {sport_key} failed: {str(e)[:50]}")
+                    
+                    # Print OddsAPI stats
+                    stats = self.odds_api.get_api_stats()
+                    print(f"\n  📊 OddsAPI Stats:")
+                    print(f"     Requests: {stats['requests_made']} (Success rate: {stats['success_rate']}%)")
+                    print(f"     Health: {'🟢 Healthy' if stats['is_healthy'] else '🔴 Degraded'}")
+            
+            except Exception as e:
+                print(f"  ⚠️  OddsAPI initialization failed: {str(e)[:50]}")
+        
+        # Apply filters
+        results = self._apply_filters(results)
+        
+        # Summary
+        print("\n" + "=" * 70)
         total = sum(len(g) for g in results.values())
         print(f"📊 TOTAL: {total} games across {len(results)} sports")
-        print("=" * 60)
+        if results:
+            for sport, games in results.items():
+                print(f"   • {sport.upper()}: {len(games)} games")
+        else:
+            print("   ⚠️  No games found - check API credentials or Nike.sk availability")
+        print("=" * 70)
         
         return results
+    
+    def _apply_filters(self, games_by_sport: Dict[str, List[Game]]) -> Dict[str, List[Game]]:
+        """Apply sport/league/count filters to games.
+        
+        Args:
+            games_by_sport: Dict of sport -> list of games
+        
+        Returns:
+            Filtered dict of sport -> list of games
+        """
+        result = {}
+        
+        for sport, games in games_by_sport.items():
+            # Filter by sport
+            if self.filter_sports and sport not in self.filter_sports:
+                continue
+            
+            # Filter by league
+            filtered_games = games
+            if self.filter_leagues:
+                filtered_games = [g for g in games if g.league in self.filter_leagues]
+            
+            # Limit per sport
+            if self.max_per_sport and len(filtered_games) > self.max_per_sport:
+                filtered_games = filtered_games[:self.max_per_sport]
+            
+            if filtered_games:
+                result[sport] = filtered_games
+        
+        return result
+    
+    def get_available_leagues(self) -> Dict[str, set]:
+        """Get all available leagues grouped by sport.
+        
+        Returns:
+            Dict of sport -> set of league names
+        """
+        leagues_by_sport = {}
+        
+        if self.use_nike:
+            try:
+                games_by_sport = self.nike_scraper.get_all_sports()
+                for sport, games in games_by_sport.items():
+                    leagues = set(g.league for g in games if g.league)
+                    if leagues:
+                        leagues_by_sport[sport] = leagues
+            except Exception as e:
+                print(f"Error getting leagues from Nike: {e}")
+        
+        return leagues_by_sport
+    
+    def _map_sport_key_to_name(self, sport_key: str) -> str:
+        """Map OddsAPI sport key to generic sport name.
+        
+        Args:
+            sport_key: API sport key (e.g., 'soccer_epl', 'basketball_nba')
+        
+        Returns:
+            Generic sport name (e.g., 'soccer', 'basketball')
+        """
+        mapping = {
+            "soccer": "soccer",
+            "basketball": "basketball",
+            "hockey": "hockey",
+            "american_football": "american_football",
+            "baseball": "baseball",
+            "tennis": "tennis",
+            "golf": "golf"
+        }
+        
+        # Extract base sport from key (first part before underscore)
+        base_sport = sport_key.split('_')[0]
+        return mapping.get(base_sport, base_sport)
     
     def _filter_by_date(
         self,
@@ -176,18 +277,20 @@ class DailyOddsFetcher:
         return deduped
 
 
-# Test function
 if __name__ == "__main__":
-    fetcher = DailyOddsFetcher(use_nike=True, use_odds_api=True)
-    
-    # Get today's top leagues
-    games_by_sport = fetcher.get_todays_games(
-        sports=["soccer", "basketball", "hockey", "tennis"]
+    # Test: Fetch what's actually available today
+    print("\n" + "=" * 70)
+    print("TESTING DAILY ODDS FETCHER")
+    print("=" * 70)
+    fetcher = DailyOddsFetcher(
+        use_nike=True,
+        use_odds_api=True
     )
     
-    # Print details
+    games_by_sport = fetcher.get_todays_games()
+    
+    # Print sample games
     for sport, games in games_by_sport.items():
         print(f"\n{sport.upper()} ({len(games)} games):")
-        for game in games[:5]:  # Show first 5
-            print(f"  • {game.home_team} vs {game.away_team}")
-            print(f"    Odds: {game.home_odds} / {game.away_odds}")
+        for game in games[:3]:
+            print(f"  • {game.home_team} vs {game.away_team} @ {game.home_odds}/{game.away_odds}")

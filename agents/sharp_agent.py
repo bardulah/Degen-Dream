@@ -41,10 +41,17 @@ You ONLY bet when you identify a clear mathematical edge. Be extremely selective
         game_info = self._format_game_info(game)
         market_context = context.get("market_data", "No additional market data")
         pinnacle_odds = context.get("pinnacle_odds", "Not available")
+        real_time_data = context.get("real_time_data", "")
+        news_context = context.get("news_context", "")
 
         user_message = f"""Game Analysis Request:
 
 {game_info}
+
+REAL-TIME DATA (from web search):
+{real_time_data}
+
+{f"RECENT NEWS:{chr(10)}{news_context}" if news_context else ""}
 
 Market Context:
 {market_context}
@@ -57,7 +64,7 @@ Should we bet this game? If yes, provide:
 2. Recommended line
 3. Estimated edge (as decimal, e.g., 0.035 for 3.5%)
 4. Confidence (0-1)
-5. Reasoning (2-3 sentences)
+5. Reasoning (2-3 sentences citing data)
 
 Respond in JSON format:
 {{
@@ -67,7 +74,7 @@ Respond in JSON format:
     "line": -110,
     "edge": 0.035,
     "confidence": 0.75,
-    "reasoning": "Your analysis",
+    "reasoning": "Your analysis with data",
     "stake_percentage": 0.02
 }}
 
@@ -94,12 +101,26 @@ If no bet, return {{"should_bet": false, "reasoning": "why not"}}"""
                 analysis.get("stake_percentage", 0.02)
             )
 
+            # Get actual odds from the game based on the team bet
+            bet_team = analysis["bet_team"]
+            if analysis["bet_type"] == "moneyline":
+                odds = game.home_odds if bet_team == game.home_team else game.away_odds
+            elif analysis["bet_type"] == "spread":
+                odds = game.home_odds if bet_team == game.home_team else game.away_odds
+            elif analysis["bet_type"] == "total":
+                odds = game.over_odds if "Over" in bet_team else game.under_odds
+                if not odds:
+                    # Total odds not available, use moneyline as proxy
+                    odds = game.home_odds
+            else:
+                odds = game.home_odds
+
             return Bet(
                 game_id=game.id,
                 team=analysis["bet_team"],
                 bet_type=analysis["bet_type"],
                 line=analysis["line"],
-                odds=self._american_to_decimal(analysis["line"]),
+                odds=odds,
                 stake=stake,
                 confidence=analysis["confidence"],
                 reasoning=analysis["reasoning"],

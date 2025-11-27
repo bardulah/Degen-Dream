@@ -9,7 +9,21 @@ from agents.base_agent import Game
 
 
 class NikeScraper:
-    """Scraper for Niké betting (Slovak betting site)."""
+    """Scraper for Niké betting (Slovak betting site) - multi-sport support."""
+
+    # Map sport names to Nike.sk URLs
+    SPORTS_MAP = {
+        "soccer": "futbal",
+        "hockey": "hokej",
+        "basketball": "basketbal",
+        "tennis": "tenis",
+        "american_football": "americanfootball",
+        "baseball": "baseball",
+        "handball": "zalmova",
+        "volleyball": "volejbal",
+    }
+    
+
 
     def __init__(self):
         """Initialize Niké scraper."""
@@ -19,15 +33,75 @@ class NikeScraper:
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
         })
 
-
-    def get_odds(self, sport: str = "soccer") -> List[Game]:
-        """Scrape odds from Nike.sk
+    def _get_default_league(self, sport: str) -> str:
+        """Get default league name when data-tournament attribute is missing.
         
         Args:
-            sport: Sport to get odds for (default: soccer)
+            sport: Sport type
+        
+        Returns:
+            Generic league name for fallback
+        """
+        sport_defaults = {
+            "soccer": "unknown_soccer",
+            "hockey": "unknown_hockey",
+            "basketball": "unknown_basketball",
+            "tennis": "unknown_tennis",
+            "american_football": "unknown_american_football",
+            "baseball": "unknown_baseball",
+            "handball": "unknown_handball",
+            "volleyball": "unknown_volleyball",
+        }
+        return sport_defaults.get(sport, "unknown")
+    
+    def get_odds(self, sport: str = "soccer") -> List[Game]:
+        """Scrape odds from Nike.sk for a specific sport.
+        
+        Args:
+            sport: Sport to get odds for (soccer, hockey, basketball, etc.)
             
         Returns:
             List of Game objects with odds
+        """
+        nike_sport = self.SPORTS_MAP.get(sport)
+        if not nike_sport:
+            print(f"Unsupported sport: {sport}")
+            return []
+        
+        url = f"{self.base_url}/tipovanie/{nike_sport}"
+        return self._scrape_sport_page(url, sport)
+    
+    def get_all_sports(self) -> Dict[str, List[Game]]:
+        """Scrape all available sports from Nike.sk.
+        
+        Returns:
+            Dict mapping sport name to list of games
+        """
+        all_games = {}
+        
+        for sport_name, nike_sport in self.SPORTS_MAP.items():
+            url = f"{self.base_url}/tipovanie/{nike_sport}"
+            try:
+                games = self._scrape_sport_page(url, sport_name)
+                if games:
+                    all_games[sport_name] = games
+                    print(f"  ✅ {sport_name}: {len(games)} games")
+                else:
+                    print(f"  ℹ️  {sport_name}: No games today")
+            except Exception as e:
+                print(f"  ⚠️  {sport_name}: Failed ({str(e)[:30]})")
+        
+        return all_games
+    
+    def _scrape_sport_page(self, url: str, sport: str) -> List[Game]:
+        """Scrape a single sport page from Nike.sk.
+        
+        Args:
+            url: Full URL to the sport page
+            sport: Sport name for Game objects
+            
+        Returns:
+            List of Game objects
         """
         try:
             from playwright.sync_api import sync_playwright
@@ -36,8 +110,8 @@ class NikeScraper:
                 browser = p.chromium.launch(headless=True)
                 page = browser.new_page()
                 
-                # Navigate to the football betting page
-                page.goto('https://www.nike.sk/tipovanie/futbal', timeout=30000)
+                # Navigate to the sport page
+                page.goto(url, timeout=30000)
                 
                 # Handle cookie consent if present
                 try:
@@ -75,14 +149,20 @@ class NikeScraper:
                         # Extract odds - look for bet-box links with odds
                         odd_elements = row.locator('a.bet-box span[data-atid="n1-bet-odd"]').all()
                         
-                        if len(odd_elements) < 3:
+                        if len(odd_elements) < 2:
                             continue
                         
-                        # Get the first 3 odds (1, X, 2)
+                        # Get the first 2 odds (at minimum for sports without draws)
                         try:
                             home_odds = float(odd_elements[0].inner_text().strip())
-                            draw_odds = float(odd_elements[1].inner_text().strip())
-                            away_odds = float(odd_elements[2].inner_text().strip())
+                            # If 3+ odds exist, second is draw, third is away
+                            # If only 2, second is away (no draw)
+                            if len(odd_elements) >= 3:
+                                draw_odds = float(odd_elements[1].inner_text().strip())
+                                away_odds = float(odd_elements[2].inner_text().strip())
+                            else:
+                                draw_odds = None
+                                away_odds = float(odd_elements[1].inner_text().strip())
                         except (ValueError, IndexError):
                             continue
                         
@@ -90,16 +170,24 @@ class NikeScraper:
                         match_id_attr = row.locator('.bet-table-left').first.get_attribute('data-match-id')
                         match_id = match_id_attr if match_id_attr else f"nike_{len(games)}"
                         
-                        # Create Game object using the base_agent.Game structure
+                        # Extract league from data-tournament attribute
+                        league = row.locator('.bet-table-left').first.get_attribute('data-tournament')
+                        if not league:
+                            # Fallback to generic default if data-tournament not available
+                            league = self._get_default_league(sport)
+                        
+                        # Create Game object
                         game = Game(
                             id=match_id,
                             home_team=home_team,
                             away_team=away_team,
-                            sport="soccer",
+                            sport=sport,
+                            league=league,
                             commence_time=datetime.now().isoformat(),
                             bookmaker="nike_sk",
                             home_odds=home_odds,
-                            away_odds=away_odds
+                            away_odds=away_odds,
+                            draw_odds=draw_odds  # None for non-draw sports
                         )
                         
                         games.append(game)
@@ -110,11 +198,10 @@ class NikeScraper:
                 
                 browser.close()
                 
-                print(f"Successfully scraped {len(games)} games from Nike.sk")
                 return games
                 
         except Exception as e:
-            print(f"Error scraping Nike.sk: {e}")
+            print(f"Error scraping Nike.sk {sport}: {e}")
             return []
 
     def _get_simulated_nike_data(self) -> List[Dict[str, Any]]:

@@ -101,7 +101,23 @@ class EmailSender:
         
         predictions_html = ""
         for i, pred in enumerate(predictions[:20], 1):  # Show top 20
-            reasoning = pred.get('reasoning', 'No reasoning provided')
+            oracle_decision = pred.get('oracle_decision', 'No oracle decision')
+            voting_summary = pred.get('voting_summary', 'No voting data')
+            consensus_reasoning = pred.get('reasoning', 'No reasoning provided')
+            all_agents = pred.get('all_agent_analysis', '')
+            odds = pred.get('odds', 0)
+            home_odds = pred.get('home_odds', 'N/A')
+            away_odds = pred.get('away_odds', 'N/A')
+            draw_odds = pred.get('draw_odds', 'N/A')
+            bet_type = pred.get('bet_type', 'N/A')
+            
+            # Format agent analysis into readable bullets
+            agent_bullets = ""
+            if all_agents:
+                lines = all_agents.split('\n\n')
+                for line in lines:
+                    if line.strip():
+                        agent_bullets += f"<li style='margin-bottom: 8px;'>{line.strip()}</li>"
             
             predictions_html += f"""
             <tr>
@@ -109,10 +125,32 @@ class EmailSender:
                 <td style="padding: 10px; border-bottom: 1px solid #eee;"><strong style="color: #2ecc71;">{pred.get('bet', 'N/A')}</strong></td>
                 <td style="padding: 10px; border-bottom: 1px solid #eee; text-align: right;">€{pred.get('stake', 0):.2f}</td>
                 <td style="padding: 10px; border-bottom: 1px solid #eee; text-align: center;">{pred.get('confidence', 0) * 100:.0f}%</td>
+                <td style="padding: 10px; border-bottom: 1px solid #eee; text-align: center;">{odds:.2f}</td>
             </tr>
             <tr>
-                <td colspan="4" style="padding: 10px; border-bottom: 1px solid #eee; background-color: #fafafa; font-size: 13px; color: #555; line-height: 1.5; word-wrap: break-word;">
-                    💭 {reasoning}
+                <td colspan="5" style="padding: 12px; border-bottom: 1px solid #eee; background-color: #fafafa; font-size: 12px; color: #333;">
+                    <strong>Market Odds:</strong> Home {home_odds} | Draw {draw_odds} | Away {away_odds}<br>
+                    <strong>Bet Type:</strong> {bet_type}
+                </td>
+            </tr>
+            <tr>
+                <td colspan="5" style="padding: 12px; border-bottom: 1px solid #eee; background-color: #f0f7ff; font-size: 12px; color: #333;">
+                    <strong style="color: #2ecc71;">🔮 Oracle's Choice:</strong> {oracle_decision}<br>
+                    <strong style="color: #666; font-size: 11px; font-weight: normal;">📊 {voting_summary}</strong>
+                </td>
+            </tr>
+            <tr>
+                <td colspan="5" style="padding: 12px; border-bottom: 1px solid #eee; background-color: #ffffff; font-size: 12px; color: #333; line-height: 1.7;">
+                    <strong style="display: block; margin-bottom: 8px;">Why This Bet?</strong>
+                    <p style="margin: 0; padding: 8px; background-color: #f9f9f9; border-left: 3px solid #2ecc71; border-radius: 3px;">{consensus_reasoning}</p>
+                </td>
+            </tr>
+            <tr>
+                <td colspan="5" style="padding: 12px; border-bottom: 1px solid #eee; background-color: #f5f5f5; font-size: 12px; color: #555;">
+                    <strong style="display: block; margin-bottom: 8px;">🤖 All Agent Picks:</strong>
+                    <ul style="margin: 0; padding-left: 20px; list-style-type: none;">
+                        {agent_bullets if agent_bullets else '<li>No detailed analysis available</li>'}
+                    </ul>
                 </td>
             </tr>
             """
@@ -171,6 +209,7 @@ class EmailSender:
                             <th>Pick</th>
                             <th>Stake</th>
                             <th>Confidence</th>
+                            <th>Odds</th>
                         </tr>
                         {predictions_html}
                     </table>

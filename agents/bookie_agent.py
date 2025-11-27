@@ -41,10 +41,13 @@ Your edge comes from understanding PUBLIC vs SHARP money and exploiting it."""
         game_info = self._format_game_info(game)
         public_data = context.get("public_betting", "No public betting data")
         line_movements = context.get("line_movements", "No line movement data")
+        real_time_data = context.get("real_time_data", "")
 
         user_message = f"""Game to set lines for:
 
 {game_info}
+
+{f"MARKET DATA (from web search):{chr(10)}{real_time_data}" if real_time_data else ""}
 
 Public Betting Percentages:
 {public_data}
@@ -98,12 +101,21 @@ Respond in JSON:
             line = float(analysis.get("line", -110))
             confidence = float(analysis.get("confidence", 0.6))
             
+            # Get actual odds from the game
+            bet_team = analysis["bet_team"]
+            if analysis["bet_type"].lower() == "total":
+                odds = game.over_odds if "Over" in bet_team else game.under_odds
+                if not odds:
+                    odds = game.home_odds  # Fallback to moneyline
+            else:
+                odds = game.home_odds if bet_team == game.home_team else game.away_odds
+            
             return Bet(
                 game_id=game.id,
                 team=analysis["bet_team"],
                 bet_type=analysis["bet_type"],
                 line=line,
-                odds=self._american_to_decimal(line),
+                odds=odds,
                 stake=stake,
                 confidence=confidence,
                 reasoning=f"{strategy_emoji} BOOKIE PLAY: {analysis['reasoning']}",

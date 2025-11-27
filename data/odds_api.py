@@ -140,6 +140,7 @@ class OddsAPIClient:
                     bookmaker=bookmaker_name,
                     home_odds=self._get_team_odds(h2h_market, event["home_team"]),
                     away_odds=self._get_team_odds(h2h_market, event["away_team"]),
+                    draw_odds=self._get_draw_odds(h2h_market),  # 3-way odds
                     home_spread=self._get_spread(spreads_market, event["home_team"]),
                     away_spread=self._get_spread(spreads_market, event["away_team"]),
                     over_under=self._get_total_line(totals_market),
@@ -172,6 +173,17 @@ class OddsAPIClient:
                 return outcome.get("price", 1.91)
 
         return 1.91
+
+    def _get_draw_odds(self, market: Optional[Dict]) -> Optional[float]:
+        """Get odds for draw in 3-way h2h market."""
+        if not market or "outcomes" not in market:
+            return None
+
+        for outcome in market["outcomes"]:
+            if outcome["name"].lower() == "draw":
+                return outcome.get("price")
+
+        return None
 
     def _get_spread(self, market: Optional[Dict], team: str) -> Optional[float]:
         """Get spread for a specific team."""
