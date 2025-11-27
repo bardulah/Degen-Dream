@@ -101,6 +101,12 @@ python main.py --daily --games 3 --no-live
 - ✅ End-to-end test passed with 3 games - agents, debate, voting, Oracle, email all working
 - ✅ Parlay generation working for all agents + Oracle
 - ✅ Discord notifications functional (429 rate limit errors are expected, non-blocking)
+- ✅ Created Results Matching System (experimental)
+  - `results_matcher.py` - Matches real scores with placed bets
+  - `results_updater.py` - Updates bet outcomes in database
+  - CLI commands: `--leaderboard`, `--update-results`
+- ✅ Agent leaderboard working - shows ROI, win rate, confidence calibration per agent
+- ✅ Verified database integrity - agents have accuracy metrics from simulations
 
 ### What Changed Since Last Thread
 All changes from T-471032c9 have been implemented:
@@ -109,6 +115,7 @@ All changes from T-471032c9 have been implemented:
 3. **Discord cleanup** - Agent picks are one-line format with `send_separator()` between
 4. **Parlay feature** - Agents generate 2-5 leg parlays, Oracle generates consensus parlay
 5. **Oracle agent** - Analyzes all picks and decides independently
+6. **Results tracking** - Added database infrastructure for result settlement
 
 ## ✅ SESSION 8: ODDSAPI IMPROVEMENTS & SMART LEAGUE SELECTION (Nov 26, 2025)
 
