@@ -349,15 +349,72 @@ if __name__ == "__main__":
     # Handle --update-results
     if args.update_results:
         import sys
-        print("\n⚠️  EXPERIMENTAL: Results matching system\n")
-        print("Note: This requires real match scores from an external source.")
-        print("Currently, this is a placeholder implementation.")
-        print("To use this feature, you would need to:")
-        print("  1. Fetch real scores from Flashscore/ESPN/OddsAPI")
-        print("  2. Match them with your placed bets")
-        print("  3. Settle bets and calculate P&L")
-        print("\nThis functionality is being developed.")
-        print("\nFor now, use --leaderboard to see agent performance")
+        from database.results_updater import ResultsUpdater
+        from data.scores_fetcher import ScoresFetcher, MockScoresFetcher
+        from database.schema import SessionLocal, Bet, BetOutcome
+        
+        print("\n" + "=" * 70)
+        print("📊 RESULTS MATCHING SYSTEM")
+        print("=" * 70)
+        
+        db_url = os.getenv("DATABASE_URL", "sqlite:///bratislava.db")
+        updater = ResultsUpdater(db_url)
+        
+        # Get pending bets from database
+        session = SessionLocal()
+        pending_bets = session.query(Bet).filter(
+            Bet.outcome == BetOutcome.PENDING
+        ).all()
+        session.close()
+        
+        if not pending_bets:
+            print("\n✅ No pending bets to update")
+            sys.exit(0)
+        
+        print(f"\n📋 Found {len(pending_bets)} pending bets")
+        print("Fetching match scores...")
+        
+        # Determine sport from pending bets
+        sports = set(b.sport for b in pending_bets)
+        
+        # Fetch scores
+        fetcher = ScoresFetcher()
+        all_scores = []
+        
+        for sport in sports:
+            print(f"\n  Fetching scores for {sport}...")
+            scores = fetcher.fetch_today_scores(sport)
+            all_scores.extend(scores)
+        
+        if not all_scores:
+            print("\n⚠️  Could not fetch real scores")
+            print("Using mock scores for demonstration...")
+            mock_fetcher = MockScoresFetcher()
+            all_scores = mock_fetcher.fetch_today_scores()
+        
+        print(f"\n✅ Retrieved {len(all_scores)} game results")
+        
+        # Update database
+        print("\nMatching bets with scores...")
+        stats = updater.update_pending_bets(all_scores)
+        
+        # Print summary
+        print("\n" + "=" * 70)
+        print("📊 UPDATE SUMMARY")
+        print("=" * 70)
+        print(f"✅ Updated: {stats['updated']} bets")
+        print(f"   🏆 Wins: {stats['wins']}")
+        print(f"   ❌ Losses: {stats['losses']}")
+        print(f"   ➖ Pushes: {stats['pushes']}")
+        print(f"\n💰 P&L: €{stats['total_profit'] - stats['total_loss']:+.2f}")
+        print(f"   Profit: €{stats['total_profit']:.2f}")
+        print(f"   Loss: €{stats['total_loss']:.2f}")
+        print("\n" + "=" * 70)
+        
+        # Show updated leaderboard
+        print("\n🏆 UPDATED AGENT LEADERBOARD\n")
+        updater.print_leaderboard(days=7)
+        
         sys.exit(0)
 
     main(

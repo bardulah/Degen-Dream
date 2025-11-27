@@ -32,7 +32,7 @@ class Bet:
 
 @dataclass
 class Game:
-    """Represents a sports game with betting lines."""
+    """Represents a sports game with betting lines and scores."""
     id: str
     home_team: str
     away_team: str
@@ -48,6 +48,8 @@ class Game:
     over_under: Optional[float] = None
     over_odds: Optional[float] = None
     under_odds: Optional[float] = None
+    home_score: Optional[int] = None  # Final/live score
+    away_score: Optional[int] = None  # Final/live score
 
 
 class BaseAgent:
@@ -92,6 +94,28 @@ class BaseAgent:
             api_key = settings.OPENROUTER_API_KEY if self.provider == "openrouter" else settings.GROQ_API_KEY
             self.client = OpenAI(base_url=base_url, api_key=api_key)
 
+    @staticmethod
+    def normalize_bet_type(bet_type: str) -> str:
+        """Normalize bet type to valid enum values.
+        
+        Args:
+            bet_type: Raw bet type from LLM
+        
+        Returns:
+            Normalized bet type (moneyline, spread, total, parlay)
+        """
+        bet_type_lower = str(bet_type).lower().strip()
+        
+        # Map various inputs to valid types
+        if "over" in bet_type_lower or "under" in bet_type_lower:
+            return "total"
+        elif "spread" in bet_type_lower or "line" in bet_type_lower:
+            return "spread"
+        elif "parlay" in bet_type_lower:
+            return "parlay"
+        else:
+            return "moneyline"  # Default
+    
     def analyze_game(self, game: Game, context: Dict[str, Any]) -> Optional[Bet]:
         """Analyze a game and return a betting decision.
 

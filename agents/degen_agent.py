@@ -98,7 +98,7 @@ YOLO it!"""
             return Bet(
                 game_id=game.id,
                 team=analysis["bet_team"],
-                bet_type=analysis["bet_type"],
+                bet_type=self.normalize_bet_type(analysis["bet_type"]),
                 line=analysis.get("line", -110),
                 odds=odds,
                 stake=stake,

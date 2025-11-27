@@ -102,7 +102,7 @@ If no inside info, return {{"have_info": false, "reasoning": "Nothing on this on
             return Bet(
                 game_id=game.id,
                 team=analysis["bet_team"],
-                bet_type=analysis["bet_type"],
+                bet_type=self.normalize_bet_type(analysis["bet_type"]),
                 line=analysis["line"],
                 odds=odds,
                 stake=stake,

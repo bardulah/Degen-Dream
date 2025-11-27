@@ -113,7 +113,7 @@ Respond in JSON:
             return Bet(
                 game_id=game.id,
                 team=analysis["bet_team"],
-                bet_type=analysis["bet_type"],
+                bet_type=self.normalize_bet_type(analysis["bet_type"]),
                 line=line,
                 odds=odds,
                 stake=stake,

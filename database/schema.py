@@ -40,6 +40,7 @@ class BetOutcome(str, enum.Enum):
     PENDING = "pending"
     WON = "won"
     LOST = "lost"
+    PUSH = "push"
     VOID = "void"
 
 
