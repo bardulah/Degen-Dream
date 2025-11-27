@@ -605,10 +605,82 @@
         let bankrollData = [{ x: 0, y: 10000 }];
         let gameCount = 0;
 
+        // Load persisted data on page load
+        async function loadPersistedData() {
+            try {
+                const response = await fetch('/api/simulations/latest');
+                if (response.ok) {
+                    const data = await response.json();
+
+                    // Update stats
+                    const stats = data.stats;
+                    document.getElementById('bankroll').textContent = `€${stats.total_bankroll.toFixed(2)}`;
+                    document.getElementById('pnl').textContent = `€${(stats.total_bankroll - stats.starting_bankroll).toFixed(2)}`;
+                    document.getElementById('roi').textContent = `${stats.roi.toFixed(2)}%`;
+
+                    // Color code ROI
+                    const roiEl = document.getElementById('roi');
+                    if (stats.roi > 0) {
+                        roiEl.className = 'stat-value val-up';
+                    } else if (stats.roi < 0) {
+                        roiEl.className = 'stat-value val-down';
+                    } else {
+                        roiEl.className = 'stat-value val-neutral';
+                    }
+
+                    // Update agent table
+                    const agentBody = document.getElementById('agentStatsBody');
+                    agentBody.innerHTML = '';
+                    data.agent_stats.forEach(agent => {
+                        const row = document.createElement('tr');
+                        const roiClass = agent.roi >= 0 ? 'val-up' : 'val-down';
+                        row.innerHTML = `
+                            <td>${agent.name}</td>
+                            <td>${agent.type.toUpperCase()}</td>
+                            <td class="${roiClass}">${agent.roi.toFixed(2)}%</td>
+                            <td>${agent.wins}/${agent.losses}</td>
+                        `;
+                        agentBody.appendChild(row);
+                    });
+
+                    // Update order book with recent bets
+                    const orderBody = document.getElementById('orderBookBody');
+                    orderBody.innerHTML = '';
+                    data.bets.slice(0, 15).forEach(bet => {
+                        const row = document.createElement('tr');
+                        let resultColor = '';
+                        if (bet.result_status === 'won') resultColor = 'style="color: var(--accent-green)"';
+                        else if (bet.result_status === 'lost') resultColor = 'style="color: var(--accent-red)"';
+
+                        row.innerHTML = `
+                            <td style="display:flex; align-items:center;">
+                                <div class="order-side ${bet.result_status === 'won' ? 'side-buy' : bet.result_status === 'lost' ? 'side-sell' : ''}"></div>
+                                ${bet.result_status || 'PENDING'}
+                            </td>
+                            <td ${resultColor}>${bet.team}</td>
+                            <td>€${bet.stake}</td>
+                            <td style="color: var(--accent-green)">${bet.odds}</td>
+                        `;
+                        orderBody.appendChild(row);
+                    });
+
+                    logSystem('Loaded previous simulation data');
+                } else {
+                    logSystem('No previous simulation found');
+                }
+            } catch (error) {
+                console.error('Error loading persisted data:', error);
+                logSystem('Failed to load previous data');
+            }
+        }
+
         // Socket Events
         socket.on('connect', () => {
             logSystem('Connected to BBS Network Node.');
             document.getElementById('connLed').classList.add('on');
+
+            // Load persisted data on connect
+            loadPersistedData();
         });
 
         socket.on('disconnect', () => {

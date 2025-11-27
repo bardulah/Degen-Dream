@@ -81,35 +81,44 @@ class Simulation(Base):
     user_id = Column(String, ForeignKey("users.id"), index=True)
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
+
     # Simulation parameters
     num_games = Column(Integer)
     starting_bankroll = Column(Float)
     kelly_fraction = Column(Float)
     sport = Column(String)
     use_live_data = Column(Boolean, default=False)
-    
+
     # Results (populated after real results come in)
     total_bets = Column(Integer, nullable=True)
     total_wagered = Column(Float, nullable=True)
-    
+    roi = Column(Float, nullable=True)  # Overall ROI
+    win_rate = Column(Float, nullable=True)  # Overall win rate
+    profit = Column(Float, nullable=True)  # Total profit/loss
+    final_bankroll = Column(Float, nullable=True)  # Ending bankroll
+
+    # Result tracking
+    bets_settled = Column(Integer, default=0)  # How many bets have results
+    last_result_check = Column(DateTime, nullable=True)  # Last time we checked for results
+
     # Metadata
-    duration_seconds = Column(Integer)  # Execution time
-    status = Column(String, default="completed")  # completed, in_progress, failed
+    duration_seconds = Column(Integer, nullable=True)  # Execution time
+    status = Column(String, default="completed")  # completed, in_progress, failed, awaiting_results
     error_message = Column(Text, nullable=True)
     notes = Column(Text, nullable=True)
-    
+
     # Checkpoint data (for resumable sims)
     checkpoint_games_completed = Column(Integer, default=0)
     checkpoint_state = Column(JSON, nullable=True)  # Serialized state for resume
-    
+
     # Relationships
     user = relationship("User", back_populates="simulations")
     bets = relationship("Bet", back_populates="simulation", cascade="all, delete-orphan")
     agent_stats = relationship("AgentSimulationStats", back_populates="simulation", cascade="all, delete-orphan")
 
     def __repr__(self) -> str:
-        return f"<Simulation {self.id} - ROI: {self.roi:.2f}%>"
+        roi_str = f"{self.roi:.2f}%" if self.roi is not None else "N/A"
+        return f"<Simulation {self.id} - ROI: {roi_str}>"
 
 
 class Bet(Base):
@@ -120,7 +129,7 @@ class Bet(Base):
     simulation_id = Column(String, ForeignKey("simulations.id"), index=True)
     agent_name = Column(String, index=True)
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
-    
+
     # Bet details
     game_home_team = Column(String)
     game_away_team = Column(String)
@@ -131,14 +140,22 @@ class Bet(Base):
     odds = Column(Float)
     stake = Column(Float)
     confidence = Column(Float)  # 0.0-1.0
-    
 
-    
+    # Match result tracking (populated after game finishes)
+    game_date = Column(String, nullable=True)  # YYYYMMDD format for ESPN API
+    game_id_espn = Column(String, nullable=True, index=True)  # ESPN game ID
+    home_score = Column(Integer, nullable=True)
+    away_score = Column(Integer, nullable=True)
+    actual_winner = Column(String, nullable=True)  # Team name or "TIE"
+    result_status = Column(String, nullable=True)  # "pending", "won", "lost", "push"
+    result_fetched_at = Column(DateTime, nullable=True)
+    profit_loss = Column(Float, nullable=True)  # Actual P&L after result
+
     # Metadata
     reasoning = Column(Text)
     edge_estimate = Column(Float, nullable=True)
     kelly_percentage = Column(Float, nullable=True)
-    
+
     # Relationships
     simulation = relationship("Simulation", back_populates="bets")
 
