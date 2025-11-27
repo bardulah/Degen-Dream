@@ -443,32 +443,31 @@ Error Handling:
 
 ### 🚀 NEXT IMMEDIATE STEPS
 
-**CURRENT FOCUS**: Results Matching System (enables actual ROI tracking)
+**CURRENT FOCUS**: Connect Real Score APIs to Results Matching
 
-1. **Results Matching System** (2-3 hours) - **CRITICAL**
-   - Fetch real scores from Flashscore/ESPN
-   - Match bets with games by teams + time (handle team name variations)
-   - Fetch odds at match time (for context)
-   - Mark PENDING bets as WON/LOST/PUSH
-   - Calculate P&L per bet and per agent
+1. **Connect Real Score APIs** (2-3 hours) - **CRITICAL**
+   - Nike.sk scraper can extract live scores
+   - Flashscore has scores (need JS scraping or API)
+   - ESPN API for historical scores
+   - OddsAPI in-play markets for scores
+   - Test with actual match results
 
-2. **Agent Accuracy Tracking** (1-2 hours) - **HIGH**
-   - Calculate win rates per agent across all simulations
-   - Track confidence calibration (% confidence vs actual win rate)
-   - Identify best agent types and personalities
-   - Store accuracy metrics in DB
+2. **Test Results Matching End-to-End** (1 hour) - **CRITICAL**
+   - Run simulation → Get real scores → Settle bets
+   - Verify P&L calculations
+   - Check agent accuracy tracking
+   - Confirm leaderboard updates
 
-3. **Discord Leaderboard** (1 hour) - **HIGH**
-   - Daily stats posted to channel
-   - Agent win rates by type
-   - Top predictions of the day
-   - Monthly ROI tracking (cumulative across all sims)
+3. **Discord Leaderboard Integration** (2 hours) - **HIGH**
+   - Post daily agent stats to channel
+   - Show ROI, win rate, confidence calibration
+   - Monthly cumulative tracking
+   - Best/worst agents of the day
 
 4. **Enhance Discord Messages** (1 hour) - **MEDIUM**
-   - Better formatting for final results
-   - Embed game odds and match info
-   - Show voting vs Oracle comparison better
-   - Pin best predictions to channel
+   - Better result formatting
+   - Embed original odds at bet time
+   - Show final scores after matches
 
 ---
 
@@ -584,34 +583,39 @@ EmailSender
 
 ---
 
-## 📊 CURRENT STATUS
+## 📊 CURRENT STATUS (Session 9)
 
-**MVP Status**: 🟢 **READY FOR BETA**
+**Status**: 🟢 **MVP+ READY** (Results matching infrastructure in place)
 
 **What Works:**
-1. ✅ Daily odds fetching (Nike.sk + OddsAPI)
+1. ✅ Daily odds fetching (Nike.sk + OddsAPI with smart league selection)
 2. ✅ Multi-agent analysis (10 agents with unique personalities)
 3. ✅ Debate system (agents discuss bets)
-4. ✅ Democratic voting (Oracle decides)
-5. ✅ Email reporting (HTML with reasoning)
-6. ✅ Database persistence (all bets saved)
-7. ✅ Authentication & rate limiting
-8. ✅ FastAPI endpoints
+4. ✅ Oracle agent (analyzes all picks independently)
+5. ✅ Democratic voting (transparent vote counts)
+6. ✅ Parlay generation (agents + Oracle)
+7. ✅ Email reporting (HTML with reasoning)
+8. ✅ Discord notifications (live updates + separators)
+9. ✅ Database persistence (all bets saved with outcome fields)
+10. ✅ Agent leaderboard (`--leaderboard` command)
+11. ✅ Results matching infrastructure (ready for API integration)
+12. ✅ Authentication & rate limiting
+13. ✅ FastAPI endpoints
 
-**What's Missing:**
-1. ⏳ Real result fetching (Flashscore/ESPN)
-2. ⏳ Bet settlement (update WON/LOST)
-3. ⏳ Agent learning (confidence calibration)
-4. ⏳ Performance dashboard
-5. ⏳ Docker setup
-6. ⏳ Unit tests
+**What's Next:**
+1. ⏳ Connect score APIs (Flashscore/ESPN/OddsAPI)
+2. ⏳ End-to-end results matching (run sim → get scores → settle)
+3. ⏳ Discord leaderboard (post daily stats to channel)
+4. ⏳ Agent learning (adjust confidence based on accuracy)
+5. ⏳ Performance dashboard (Streamlit visualization)
+6. ⏳ Docker setup (production deployment)
 
 **Estimated Timeline:**
-- Results fetching: 1-2 hours
+- Score APIs: 2-3 hours
+- Results matching end-to-end: 1 hour
+- Discord leaderboard: 2 hours
 - Agent learning: 2-3 hours
 - Dashboard: 3-4 hours
-- Docker: 1-2 hours
-- Tests: 2-3 hours
 
 ---
 
