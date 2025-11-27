@@ -151,6 +151,11 @@ class Bet(Base):
     result_fetched_at = Column(DateTime, nullable=True)
     profit_loss = Column(Float, nullable=True)  # Actual P&L after result
 
+    # Closing Line Value (CLV) tracking
+    closing_odds = Column(Float, nullable=True)  # Odds at game time (closing line)
+    clv_percentage = Column(Float, nullable=True)  # (closing_odds - bet_odds) / bet_odds * 100
+    beat_closing_line = Column(Boolean, nullable=True)  # True if bet odds > closing odds
+
     # Metadata
     reasoning = Column(Text)
     edge_estimate = Column(Float, nullable=True)
