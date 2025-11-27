@@ -163,6 +163,8 @@ class SyndicateGraph:
                 response = f"I'm betting on {bet.team} ({bet.bet_type}). {bet.reasoning}"
                 decision = {
                     "bet_type": bet.bet_type,
+                    "team": bet.team,
+                    "line": bet.line,
                     "stake": bet.stake,
                     "confidence": bet.confidence,
                     "odds": bet.odds

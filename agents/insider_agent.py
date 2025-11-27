@@ -96,8 +96,9 @@ If no inside info, return {{"have_info": false, "reasoning": "Nothing on this on
                 odds = game.over_odds if "Over" in bet_team else game.under_odds
                 if not odds:
                     odds = game.home_odds  # Fallback to moneyline
-            elif bet_team.lower() == "draw":
-                odds = game.draw_odds if game.draw_odds else game.home_odds
+            elif analysis["bet_type"].lower() == "draw" or bet_team.lower() == "draw":
+                odds = game.draw_odds if game.draw_odds else 1.0
+                bet_team = "Draw"
             else:
                 odds = game.home_odds if bet_team == game.home_team else game.away_odds
 

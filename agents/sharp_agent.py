@@ -108,6 +108,9 @@ If no bet, return {{"should_bet": false, "reasoning": "why not"}}"""
                     odds = game.draw_odds if game.draw_odds else game.home_odds
                 else:
                     odds = game.home_odds if bet_team == game.home_team else game.away_odds
+            elif analysis["bet_type"] == "draw":
+                odds = game.draw_odds if game.draw_odds else 1.0
+                bet_team = "Draw"
             elif analysis["bet_type"] == "spread":
                 odds = game.home_odds if bet_team == game.home_team else game.away_odds
             elif analysis["bet_type"] == "total":

@@ -155,6 +155,7 @@ class OddsAggregator:
         # Find best odds across all sources
         best_home_odds = base_game.home_odds
         best_away_odds = base_game.away_odds
+        best_draw_odds = base_game.draw_odds
         best_home_source = base_source
         best_away_source = base_source
         
@@ -166,6 +167,9 @@ class OddsAggregator:
             if game.away_odds and game.away_odds > best_away_odds:
                 best_away_odds = game.away_odds
                 best_away_source = source
+                
+            if game.draw_odds and (best_draw_odds is None or game.draw_odds > best_draw_odds):
+                best_draw_odds = game.draw_odds
         
         # Create merged game with best odds
         merged = Game(
@@ -177,6 +181,7 @@ class OddsAggregator:
             bookmaker=f"{best_home_source}/{best_away_source}",
             home_odds=best_home_odds,
             away_odds=best_away_odds,
+            draw_odds=best_draw_odds,
             home_spread=base_game.home_spread,
             away_spread=base_game.away_spread,
             over_under=base_game.over_under,
