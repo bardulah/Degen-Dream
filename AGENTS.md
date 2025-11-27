@@ -93,6 +93,23 @@ python main.py --daily --games 3 --no-live
 
 ---
 
+## ✅ SESSION 9: THREAD CONTINUATION & ORACLE PARLAY FIX (Nov 27, 2025)
+
+### Completed This Session
+- ✅ Fixed Oracle parlay bankroll attribute bug (initial_bankroll not starting_bankroll)
+- ✅ Verified all previous thread changes are live (league fix, odds fix, parlays, Discord)
+- ✅ End-to-end test passed with 3 games - agents, debate, voting, Oracle, email all working
+- ✅ Parlay generation working for all agents + Oracle
+- ✅ Discord notifications functional (429 rate limit errors are expected, non-blocking)
+
+### What Changed Since Last Thread
+All changes from T-471032c9 have been implemented:
+1. **League identification** - Now uses Nike.sk's `data-tournament` attribute (no manual map)
+2. **Agent odds** - Fixed to use actual Game object odds instead of LLM-parsed odds
+3. **Discord cleanup** - Agent picks are one-line format with `send_separator()` between
+4. **Parlay feature** - Agents generate 2-5 leg parlays, Oracle generates consensus parlay
+5. **Oracle agent** - Analyzes all picks and decides independently
+
 ## ✅ SESSION 8: ODDSAPI IMPROVEMENTS & SMART LEAGUE SELECTION (Nov 26, 2025)
 
 ### Completed This Session
@@ -417,33 +434,34 @@ Error Handling:
 7. **Type Hints** - Complete type annotations
 8. **Docstrings** - Full documentation
 
-### 🚀 NEXT IMMEDIATE STEPS (Discord First)
+### 🚀 NEXT IMMEDIATE STEPS
 
-**REASON**: Discord is working, focus on improving what we have. Dashboard can wait.
+**CURRENT FOCUS**: Results Matching System (enables actual ROI tracking)
 
-1. **Enhance Discord Messages** (1-2 hours)
-   - Better formatting for agent cards
-   - Embed game odds and market info
-   - Show voting vs Oracle comparison
-   - Link to email report
+1. **Results Matching System** (2-3 hours) - **CRITICAL**
+   - Fetch real scores from Flashscore/ESPN
+   - Match bets with games by teams + time (handle team name variations)
+   - Fetch odds at match time (for context)
+   - Mark PENDING bets as WON/LOST/PUSH
+   - Calculate P&L per bet and per agent
 
-2. **Results Matching System** (2-3 hours)
-   - Fetch real scores from Flashscore
-   - Match bets with games by teams + time
-   - Calculate P&L per bet
-   - Mark PENDING bets as WON/LOST
+2. **Agent Accuracy Tracking** (1-2 hours) - **HIGH**
+   - Calculate win rates per agent across all simulations
+   - Track confidence calibration (% confidence vs actual win rate)
+   - Identify best agent types and personalities
+   - Store accuracy metrics in DB
 
-3. **Agent Accuracy Tracking** (1-2 hours)
-   - Calculate win rates per agent
-   - Track confidence calibration
-   - Identify best agent types
-   - Show leaderboard in Discord
-
-4. **Discord Leaderboard** (1 hour)
+3. **Discord Leaderboard** (1 hour) - **HIGH**
    - Daily stats posted to channel
    - Agent win rates by type
    - Top predictions of the day
-   - Monthly ROI tracking
+   - Monthly ROI tracking (cumulative across all sims)
+
+4. **Enhance Discord Messages** (1 hour) - **MEDIUM**
+   - Better formatting for final results
+   - Embed game odds and match info
+   - Show voting vs Oracle comparison better
+   - Pin best predictions to channel
 
 ---
 

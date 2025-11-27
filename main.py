@@ -3,7 +3,7 @@
 
 import argparse
 import os
-from typing import Optional
+from typing import Optional, List
 import uuid
 from datetime import datetime
 
@@ -310,6 +310,16 @@ if __name__ == "__main__":
         action="store_true",
         help="Show available leagues and exit"
     )
+    parser.add_argument(
+        "--update-results",
+        action="store_true",
+        help="Update pending bets with real match results (experimental)"
+    )
+    parser.add_argument(
+        "--leaderboard",
+        action="store_true",
+        help="Show agent leaderboard"
+    )
 
     args = parser.parse_args()
     
@@ -325,6 +335,29 @@ if __name__ == "__main__":
             for league in sorted(league_set):
                 print(f"  • {league}")
         print("\n" + "=" * 70)
+        sys.exit(0)
+    
+    # Handle --leaderboard
+    if args.leaderboard:
+        import sys
+        from database.results_updater import ResultsUpdater
+        db_url = os.getenv("DATABASE_URL", "sqlite:///bratislava.db")
+        updater = ResultsUpdater(db_url)
+        updater.print_leaderboard(days=7)
+        sys.exit(0)
+    
+    # Handle --update-results
+    if args.update_results:
+        import sys
+        print("\n⚠️  EXPERIMENTAL: Results matching system\n")
+        print("Note: This requires real match scores from an external source.")
+        print("Currently, this is a placeholder implementation.")
+        print("To use this feature, you would need to:")
+        print("  1. Fetch real scores from Flashscore/ESPN/OddsAPI")
+        print("  2. Match them with your placed bets")
+        print("  3. Settle bets and calculate P&L")
+        print("\nThis functionality is being developed.")
+        print("\nFor now, use --leaderboard to see agent performance")
         sys.exit(0)
 
     main(
