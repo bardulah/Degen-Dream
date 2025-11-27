@@ -4,6 +4,7 @@ import requests
 from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime, timedelta
 from difflib import SequenceMatcher
+from fuzzywuzzy import fuzz
 from database.schema import Bet, BetOutcome
 from agents.base_agent import Game
 
@@ -71,13 +72,17 @@ class ResultsMatcher:
         best_score = 0.0
         
         for game in games:
-            # Compare home team
+            # Compare home team (must be reasonably close)
             home_score = self._fuzzy_match(bet.game_home_team, game.home_team)
             away_score = self._fuzzy_match(bet.game_away_team, game.away_team)
             
+            # Both teams must match reasonably well
             combined_score = (home_score + away_score) / 2
             
-            if combined_score > best_score and combined_score > 0.8:  # >80% match
+            # Lower threshold for basketball teams (shorter names like "Lakers")
+            threshold = 0.6 if len(bet.game_home_team.split()) <= 2 else 0.75
+            
+            if combined_score > best_score and combined_score > threshold:
                 best_match = game
                 best_score = combined_score
         
@@ -247,7 +252,7 @@ class ResultsMatcher:
             if unicodedata.category(c) != 'Mn'
         )
         
-        # Common mappings
+        # Common mappings for team name variations
         mappings = {
             'manchester city': 'man city',
             'manchester united': 'man utd',
@@ -255,6 +260,12 @@ class ResultsMatcher:
             'real madrid': 'real',
             'paris saint germain': 'psg',
             'paris sg': 'psg',
+            'los angeles lakers': 'lakers',
+            'golden state warriors': 'warriors',
+            'golden state': 'warriors',
+            'new york knicks': 'knicks',
+            'new york': 'knicks',
+            'los angeles clippers': 'clippers',
         }
         
         for key, val in mappings.items():
@@ -264,7 +275,7 @@ class ResultsMatcher:
         return normalized
     
     def _fuzzy_match(self, str1: str, str2: str) -> float:
-        """Calculate fuzzy match score (0-1).
+        """Calculate fuzzy match score (0-1) using token_set ratio.
         
         Args:
             str1: First string
@@ -276,7 +287,11 @@ class ResultsMatcher:
         s1 = self._normalize_team(str1)
         s2 = self._normalize_team(str2)
         
-        return SequenceMatcher(None, s1, s2).ratio()
+        # Use token_set_ratio for better matching of team names with different word orders
+        # e.g., "Manchester City" vs "City Manchester"
+        score = fuzz.token_set_ratio(s1, s2) / 100.0
+        
+        return score
     
     def fetch_today_results(self, sport: str = "soccer") -> List[Game]:
         """Fetch today's match results from available APIs.

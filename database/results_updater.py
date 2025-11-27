@@ -1,12 +1,14 @@
 """Update bet results in database after matches are settled."""
 
+import asyncio
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, func
 from sqlalchemy.orm import sessionmaker
 from database.schema import Base, Bet, Simulation, BetOutcome
 from data.results_matcher import ResultsMatcher
 from agents.base_agent import Game
+import os
 
 
 class ResultsUpdater:
@@ -280,3 +282,50 @@ class ResultsUpdater:
             print(f"   📈 Calibration Error: {agent['confidence_calibration']:.2f}")
         
         print("\n" + "=" * 80)
+    
+    async def post_leaderboard_to_discord(self, days: int = 7) -> bool:
+        """Post agent leaderboard to Discord.
+        
+        Args:
+            days: Number of days to look back
+        
+        Returns:
+            True if posted successfully
+        """
+        # Check if Discord is configured
+        webhook_url = os.getenv("DISCORD_WEBHOOK_URL")
+        if not webhook_url:
+            print("⚠️  Discord webhook not configured - skipping leaderboard post")
+            return False
+        
+        # Import here to avoid circular imports
+        from notification.discord_notifier import DiscordNotifier
+        
+        # Get leaderboard data
+        leaderboard = self.get_leaderboard(days)
+        if not leaderboard:
+            print(f"⚠️  No leaderboard data for last {days} days")
+            return False
+        
+        # Format for Discord
+        leaderboard_data = []
+        for i, agent in enumerate(leaderboard, 1):
+            rank = i
+            agent_name = agent["agent"]
+            roi = agent["roi"]
+            win_rate = agent["win_rate"]
+            record = f"{agent['wins']}W-{agent['losses']}L"
+            stats = agent
+            
+            leaderboard_data.append((rank, agent_name, roi, win_rate, record, stats))
+        
+        # Send to Discord
+        notifier = DiscordNotifier(webhook_url)
+        success = await notifier.send_leaderboard_embed(leaderboard_data)
+        
+        if success:
+            print("✅ Leaderboard posted to Discord")
+        else:
+            print("⚠️  Failed to post leaderboard to Discord")
+        
+        return success

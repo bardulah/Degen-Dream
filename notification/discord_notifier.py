@@ -266,6 +266,62 @@ class DiscordNotifier:
         message = f"⚠️  **ERROR**: {error_message}"
         return await self.send_message(message)
     
+    async def send_leaderboard(self, leaderboard_data: list) -> bool:
+        """Send agent leaderboard to Discord.
+        
+        Args:
+            leaderboard_data: List of (rank, agent_name, roi, win_rate, record, stats) tuples
+        
+        Returns:
+            True if sent successfully
+        """
+        if not self.enabled or not leaderboard_data:
+            return False
+        
+        # Build formatted message
+        message = "🏆 **AGENT LEADERBOARD** (Last 7 Days)\n\n"
+        
+        for rank, agent_name, roi, win_rate, record, stats in leaderboard_data:
+            medal = ["🥇", "🥈", "🥉"][min(rank - 1, 2)] if rank <= 3 else f"#{rank}"
+            
+            # Format: medal + name + ROI + W-L record
+            line = f"{medal} **{agent_name}** | ROI: {roi:+.1f}% | {record} | {win_rate:.0%} WR\n"
+            message += line
+        
+        # Add summary
+        message += f"\n_Updated: {datetime.now().strftime('%Y-%m-%d %H:%M UTC')}_"
+        
+        return await self.send_message(message)
+    
+    async def send_leaderboard_embed(self, leaderboard_data: list) -> bool:
+        """Send agent leaderboard as Discord embed (more visual).
+        
+        Args:
+            leaderboard_data: List of (rank, agent_name, roi, win_rate, record, stats) tuples
+        
+        Returns:
+            True if sent successfully
+        """
+        if not self.enabled or not leaderboard_data:
+            return False
+        
+        # Build fields for embed
+        fields = {}
+        
+        for rank, agent_name, roi, win_rate, record, stats in leaderboard_data[:10]:  # Top 10
+            medal = ["🥇", "🥈", "🥉"][min(rank - 1, 2)] if rank <= 3 else f"#{rank}"
+            
+            # Value includes ROI, record, and win rate
+            value = f"**ROI:** {roi:+.1f}%\n**Record:** {record}\n**Win Rate:** {win_rate:.0%}"
+            
+            fields[f"{medal} {agent_name}"] = value
+        
+        return await self.send_embed(
+            title="🏆 Agent Leaderboard (Last 7 Days)",
+            fields=fields,
+            color=DISCORD_COLORS["gold"]
+        )
+    
     # ─────────────────────────────────────────────────────────────────────
     # Utility methods
     # ─────────────────────────────────────────────────────────────────────

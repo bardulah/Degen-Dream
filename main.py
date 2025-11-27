@@ -415,6 +415,11 @@ if __name__ == "__main__":
         print("\n🏆 UPDATED AGENT LEADERBOARD\n")
         updater.print_leaderboard(days=7)
         
+        # Post to Discord if configured
+        print("\nPosting leaderboard to Discord...")
+        import asyncio
+        asyncio.run(updater.post_leaderboard_to_discord(days=7))
+        
         sys.exit(0)
 
     main(

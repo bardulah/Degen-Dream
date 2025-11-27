@@ -5,6 +5,7 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
 from agents.base_agent import Game
 import os
+from fuzzywuzzy import fuzz
 
 
 class ScoresFetcher:
@@ -29,17 +30,23 @@ class ScoresFetcher:
         # Try sources in order of preference
         scores = []
         
-        # 1. Try OddsAPI (has scores in in-play markets)
+        # 1. Try free API-Football (has live scores)
+        if sport == "soccer":
+            scores = self._fetch_from_api_football(sport)
+            if scores:
+                return scores
+        
+        # 2. Try OddsAPI (has scores in in-play markets)
         scores = self._fetch_from_odds_api(sport)
         if scores:
             return scores
         
-        # 2. Try ESPN (has more sports)
+        # 3. Try ESPN (has more sports)
         scores = self._fetch_from_espn(sport)
         if scores:
             return scores
         
-        # 3. Try Flashscore (most reliable but needs JS)
+        # 4. Try Flashscore (most reliable but needs JS)
         # scores = self._fetch_from_flashscore(sport)
         # if scores:
         #     return scores
@@ -66,6 +73,90 @@ class ScoresFetcher:
             return scores
         
         return []
+    
+    def _fetch_from_api_football(self, sport: str) -> List[Game]:
+        """Fetch scores from free API-Football.
+        
+        Uses rapid-api.io free tier (no key required for basic requests).
+        
+        Args:
+            sport: Sport type (only soccer supported)
+        
+        Returns:
+            List of Game objects with scores
+        """
+        try:
+            if sport != "soccer":
+                return []
+            
+            # Today's date
+            today = datetime.now().strftime("%Y-%m-%d")
+            
+            # API-Football endpoint for today's matches
+            url = "https://api-football-v1.p.rapidapi.com/v3/fixtures"
+            params = {
+                "date": today,
+                "status": "FT"  # FT = Finished, also includes LV (Live)
+            }
+            
+            headers = {
+                "X-RapidAPI-Key": os.getenv("RAPIDAPI_KEY", ""),
+                "X-RapidAPI-Host": "api-football-v1.p.rapidapi.com"
+            }
+            
+            print(f"  📡 Fetching scores from API-Football ({sport})...")
+            
+            # If no RapidAPI key, skip
+            if not headers["X-RapidAPI-Key"]:
+                print(f"    ℹ️  API-Football requires RAPIDAPI_KEY env var")
+                return []
+            
+            response = self.session.get(url, params=params, headers=headers, timeout=10)
+            
+            if response.status_code != 200:
+                print(f"    ❌ API-Football error: {response.status_code}")
+                return []
+            
+            data = response.json()
+            games = []
+            
+            for match in data.get("response", []):
+                try:
+                    # Only include finished matches (with final scores)
+                    if match.get("fixture", {}).get("status", {}).get("short") not in ["FT", "AET", "PEN"]:
+                        continue
+                    
+                    game = Game(
+                        id=f"apifootball_{match['fixture']['id']}",
+                        home_team=match.get("teams", {}).get("home", {}).get("name", "Unknown"),
+                        away_team=match.get("teams", {}).get("away", {}).get("name", "Unknown"),
+                        sport=sport,
+                        league=match.get("league", {}).get("name", "unknown"),
+                        commence_time=match.get("fixture", {}).get("date", datetime.now().isoformat()),
+                        bookmaker="api_football",
+                        home_odds=1.0,  # Not available in this API
+                        away_odds=1.0,
+                        home_score=match.get("goals", {}).get("home"),
+                        away_score=match.get("goals", {}).get("away"),
+                    )
+                    
+                    # Only include if we have scores
+                    if game.home_score is not None and game.away_score is not None:
+                        games.append(game)
+                
+                except Exception as e:
+                    continue
+            
+            if games:
+                print(f"    ✅ Found {len(games)} finished matches")
+            else:
+                print(f"    ℹ️  No finished matches found")
+            
+            return games
+            
+        except Exception as e:
+            print(f"    ⚠️  API-Football error: {str(e)[:50]}")
+            return []
     
     def _fetch_from_odds_api(self, sport: str) -> List[Game]:
         """Fetch scores from TheOddsAPI.
@@ -286,7 +377,7 @@ class MockScoresFetcher(ScoresFetcher):
             List of mock Game objects with scores
         """
         mock_games = [
-            # Use exact names to match sample data
+            # Soccer matches
             Game(
                 id="mock_1",
                 home_team="Real Madrid",
@@ -325,6 +416,33 @@ class MockScoresFetcher(ScoresFetcher):
                 away_odds=1.9,
                 home_score=1,
                 away_score=1,
+            ),
+            # Basketball matches
+            Game(
+                id="mock_4",
+                home_team="Los Angeles Lakers",
+                away_team="Golden State Warriors",
+                sport="basketball",
+                league="nba",
+                commence_time=datetime.now().isoformat(),
+                bookmaker="mock",
+                home_odds=2.1,
+                away_odds=1.8,
+                home_score=120,
+                away_score=115,
+            ),
+            Game(
+                id="mock_5",
+                home_team="Boston Celtics",
+                away_team="Miami Heat",
+                sport="basketball",
+                league="nba",
+                commence_time=datetime.now().isoformat(),
+                bookmaker="mock",
+                home_odds=1.9,
+                away_odds=1.95,
+                home_score=105,
+                away_score=98,
             ),
         ]
         

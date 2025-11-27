@@ -93,6 +93,57 @@ python main.py --daily --games 3 --no-live
 
 ---
 
+## ✅ SESSION 11: API-FOOTBALL INTEGRATION & DISCORD LEADERBOARD (Nov 27, 2025)
+
+### Completed This Session (Phase 3 Continued)
+- ✅ Integrated API-Football for soccer score fetching
+  - Free API with RapidAPI key
+  - Filters finished matches only (FT, AET, PEN status)
+  - Returns home_score, away_score for settlement
+- ✅ Improved team name matching
+  - Added fuzzywuzzy token_set_ratio for better matching
+  - Supports name variations (Los Angeles Lakers → Lakers)
+  - Dynamic threshold based on team name length
+  - Example: "Lakers" matches "Los Angeles Lakers" at 100%
+- ✅ Enhanced mock data for basketball games
+  - Added Lakers vs Warriors, Celtics vs Heat to MockScoresFetcher
+  - Enables end-to-end testing without real APIs
+- ✅ Implemented Discord leaderboard posting
+  - `post_leaderboard_to_discord()` method in ResultsUpdater
+  - Sends formatted embed with top 10 agents
+  - Shows ROI, Win Rate, W-L record per agent
+  - Auto-posts after `--update-results` command
+- ✅ Full end-to-end workflow verified
+  - `--games` creates bets (status: PENDING)
+  - `--update-results` matches with scores and settles
+  - Discord posts leaderboard (if webhook configured)
+  - Database tracks ROI, win rate, calibration
+
+### Test Results
+```
+✅ Sample simulation creates 3 Oracle bets
+✅ Bets stored in database with PENDING status
+✅ Update-results matches 2/3 bets with mock scores
+✅ Settlement calculates P&L correctly (€-54.64)
+✅ Leaderboard shows Oracle 42.9% win rate, -18.83% ROI
+✅ Discord leaderboard posted successfully
+```
+
+### Configuration
+```bash
+# Enable API-Football (free tier with RapidAPI key)
+export RAPIDAPI_KEY="your-rapidapi-key"
+
+# Enable Discord leaderboard posting
+export DISCORD_WEBHOOK_URL="https://discord.com/api/webhooks/..."
+
+# Run full flow
+python main.py --games 5 --daily --no-live
+python main.py --update-results  # Fetches scores + posts leaderboard
+```
+
+---
+
 ## ✅ SESSION 10: SCORE FETCHING & RESULTS MATCHING (Nov 27, 2025)
 
 ### Completed This Session (Phase 3)
