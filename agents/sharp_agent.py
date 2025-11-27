@@ -104,7 +104,10 @@ If no bet, return {{"should_bet": false, "reasoning": "why not"}}"""
             # Get actual odds from the game based on the team bet
             bet_team = analysis["bet_team"]
             if analysis["bet_type"] == "moneyline":
-                odds = game.home_odds if bet_team == game.home_team else game.away_odds
+                if bet_team.lower() == "draw":
+                    odds = game.draw_odds if game.draw_odds else game.home_odds
+                else:
+                    odds = game.home_odds if bet_team == game.home_team else game.away_odds
             elif analysis["bet_type"] == "spread":
                 odds = game.home_odds if bet_team == game.home_team else game.away_odds
             elif analysis["bet_type"] == "total":
@@ -142,6 +145,10 @@ Moneyline:
 - {game.home_team}: {game.home_odds}
 - {game.away_team}: {game.away_odds}
 """
+        # Add draw odds if available (for soccer)
+        if game.draw_odds:
+            info += f"- Draw: {game.draw_odds}\n"
+        
         if game.home_spread:
             info += f"""\nSpread:
 - {game.home_team}: {game.home_spread} ({game.home_odds})

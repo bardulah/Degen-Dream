@@ -35,13 +35,7 @@ class BetType(str, enum.Enum):
     PARLAY = "parlay"
 
 
-class BetOutcome(str, enum.Enum):
-    """Bet outcomes."""
-    PENDING = "pending"
-    WON = "won"
-    LOST = "lost"
-    PUSH = "push"
-    VOID = "void"
+
 
 
 class User(Base):
@@ -95,13 +89,9 @@ class Simulation(Base):
     sport = Column(String)
     use_live_data = Column(Boolean, default=False)
     
-    # Results
-    final_bankroll = Column(Float)
-    roi = Column(Float)
-    win_rate = Column(Float)
-    total_bets = Column(Integer)
-    total_wagered = Column(Float)
-    max_drawdown = Column(Float)
+    # Results (populated after real results come in)
+    total_bets = Column(Integer, nullable=True)
+    total_wagered = Column(Float, nullable=True)
     
     # Metadata
     duration_seconds = Column(Integer)  # Execution time
@@ -142,9 +132,7 @@ class Bet(Base):
     stake = Column(Float)
     confidence = Column(Float)  # 0.0-1.0
     
-    # Outcome
-    outcome = Column(SQLEnum(BetOutcome), default=BetOutcome.PENDING, index=True)
-    profit_loss = Column(Float, nullable=True)
+
     
     # Metadata
     reasoning = Column(Text)

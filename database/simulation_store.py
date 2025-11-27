@@ -6,7 +6,7 @@ from typing import List, Dict, Any, Optional
 from sqlalchemy.orm import Session
 
 from database.schema import (
-    Simulation, Bet, BetOutcome, AgentSimulationStats, User
+    Simulation, Bet, AgentSimulationStats, User
 )
 from monitoring.logger import logger
 
@@ -123,9 +123,7 @@ class SimulationStore:
         odds: float,
         stake: float,
         confidence: float,
-        reasoning: str,
-        outcome: str = "pending",
-        profit_loss: float = None
+        reasoning: str
     ) -> Optional[str]:
         """Save individual bet to database. Returns bet ID."""
         try:
@@ -144,8 +142,6 @@ class SimulationStore:
                 stake=stake,
                 confidence=confidence,
                 reasoning=reasoning,
-                outcome=BetOutcome[outcome.upper()],
-                profit_loss=profit_loss,
                 created_at=datetime.utcnow()
             )
             
@@ -160,31 +156,7 @@ class SimulationStore:
             db.rollback()
             return None
 
-    @staticmethod
-    def settle_bet(
-        db: Session,
-        bet_id: str,
-        won: bool,
-        profit_loss: float
-    ) -> bool:
-        """Settle a bet outcome."""
-        try:
-            bet = db.query(Bet).filter(Bet.id == bet_id).first()
-            if not bet:
-                return False
-            
-            bet.outcome = BetOutcome.WON if won else BetOutcome.LOST
-            bet.profit_loss = profit_loss
-            
-            db.commit()
-            
-            logger.log_bet_result(bet.simulation_id, won, profit_loss)
-            return True
-        
-        except Exception as e:
-            logger.error(f"Failed to settle bet: {str(e)}")
-            db.rollback()
-            return False
+
 
     @staticmethod
     def get_simulation_bets(

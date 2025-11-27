@@ -107,6 +107,8 @@ Respond in JSON:
                 odds = game.over_odds if "Over" in bet_team else game.under_odds
                 if not odds:
                     odds = game.home_odds  # Fallback to moneyline
+            elif bet_team.lower() == "draw":
+                odds = game.draw_odds if game.draw_odds else game.home_odds
             else:
                 odds = game.home_odds if bet_team == game.home_team else game.away_odds
             
@@ -170,6 +172,10 @@ Current odds:
 - {game.away_team}: {game.away_odds}
 - {game.home_team}: {game.home_odds}
 """
+        # Add draw odds if available (for soccer)
+        if game.draw_odds:
+            info += f"- Draw: {game.draw_odds}\n"
+        
         if game.home_spread:
             info += f"Spread: {game.home_team} {game.home_spread}\n"
         if game.over_under:

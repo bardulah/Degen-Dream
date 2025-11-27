@@ -426,8 +426,7 @@ class SyndicateGraph:
                     odds=consensus_bet.odds,
                     stake=consensus_bet.stake,
                     confidence=consensus_bet.confidence,
-                    reasoning=consensus_bet.reasoning,
-                    outcome="pending"
+                    reasoning=consensus_bet.reasoning
                 )
                 if bet_id:
                     consensus_bet.id = bet_id  # Monkey-patch ID onto bet object
@@ -518,19 +517,23 @@ def run_simulation(
     syndicate.monitor = monitor  # Pass monitor to syndicate
     bankroll_manager = syndicate.bankroll_manager
     
-    # Initialize Search Client
+    # Initialize Search Client (Real-time context for agents)
+    search_enabled = False
+    search_client = None
     try:
         from data.gemini_search import GeminiSearchClient
         search_client = GeminiSearchClient()
         search_enabled = True
         if monitor:
-            monitor.log_event("INFO", "Gemini Search Grounding enabled")
+            monitor.log_event("INFO", "✅ Gemini Search Grounding enabled")
         else:
-            print("🔍 Gemini Search Grounding enabled")
+            print("🔍 Gemini Search Grounding enabled (real-time injury/news data)")
     except Exception as e:
         search_enabled = False
         if monitor:
             monitor.show_warning(f"Gemini Search disabled: {e}")
+        else:
+            print(f"⚠️  Gemini Search disabled: {e}")
 
     results = []
     games_analyzed = 0

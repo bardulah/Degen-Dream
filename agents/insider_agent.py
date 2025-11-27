@@ -96,6 +96,8 @@ If no inside info, return {{"have_info": false, "reasoning": "Nothing on this on
                 odds = game.over_odds if "Over" in bet_team else game.under_odds
                 if not odds:
                     odds = game.home_odds  # Fallback to moneyline
+            elif bet_team.lower() == "draw":
+                odds = game.draw_odds if game.draw_odds else game.home_odds
             else:
                 odds = game.home_odds if bet_team == game.home_team else game.away_odds
 
@@ -117,10 +119,16 @@ If no inside info, return {{"have_info": false, "reasoning": "Nothing on this on
 
     def _format_game_info(self, game: Game) -> str:
         """Format game information."""
-        return f"""{game.away_team} @ {game.home_team}
+        lines = f"""{game.away_team} @ {game.home_team}
 Sport: {game.sport}
 Time: {game.commence_time}
 Current lines: {game.away_team} {game.away_odds} / {game.home_team} {game.home_odds}"""
+        
+        # Add draw odds if available (for soccer)
+        if game.draw_odds:
+            lines += f" / Draw {game.draw_odds}"
+        
+        return lines
 
     def _parse_json_response(self, response: str) -> Dict[str, Any]:
         """Parse JSON from Claude response."""

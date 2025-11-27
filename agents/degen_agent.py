@@ -92,6 +92,8 @@ YOLO it!"""
                 odds = game.over_odds if "Over" in bet_team else game.under_odds
                 if not odds:
                     odds = game.home_odds  # Fallback to moneyline
+            elif bet_team.lower() == "draw":
+                odds = game.draw_odds if game.draw_odds else game.home_odds
             else:
                 odds = game.home_odds if bet_team == game.home_team else game.away_odds
 
@@ -113,10 +115,16 @@ YOLO it!"""
 
     def _format_game_info(self, game: Game) -> str:
         """Format game information."""
-        return f"""{game.away_team} @ {game.home_team}
+        info = f"""{game.away_team} @ {game.home_team}
 {game.away_team}: {game.away_odds}
-{game.home_team}: {game.home_odds}
-Total: {game.over_under if game.over_under else 'N/A'}"""
+{game.home_team}: {game.home_odds}"""
+        
+        # Add draw odds if available (for soccer)
+        if game.draw_odds:
+            info += f"\nDraw: {game.draw_odds}"
+        
+        info += f"\nTotal: {game.over_under if game.over_under else 'N/A'}"
+        return info
 
     def _parse_json_response(self, response: str) -> Dict[str, Any]:
         """Parse JSON from Claude response."""
