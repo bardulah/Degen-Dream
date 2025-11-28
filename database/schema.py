@@ -263,6 +263,26 @@ class UsageLimit(Base):
     features = Column(JSON)  # {custom_agents: True, pdf_export: True, api_access: False, ...}
 
 
+class OddsHistory(Base):
+    """Historical odds tracking for closing line value analysis."""
+    __tablename__ = "odds_history"
+
+    id = Column(String, primary_key=True, index=True)  # UUID
+    game_id = Column(String, index=True)  # ESPN game ID
+    sport = Column(String, index=True)
+    home_team = Column(String)
+    away_team = Column(String)
+    home_odds = Column(Float)
+    away_odds = Column(Float)
+    spread_home = Column(Float, nullable=True)
+    spread_away = Column(Float, nullable=True)
+    total_over = Column(Float, nullable=True)
+    total_under = Column(Float, nullable=True)
+    total_line = Column(Float, nullable=True)
+    fetched_at = Column(DateTime, default=datetime.utcnow, index=True)
+    source = Column(String, default='odds_api')  # 'odds_api', 'espn', 'sofascore', etc.
+
+
 def init_db():
     """Create all tables."""
     Base.metadata.create_all(bind=engine)
