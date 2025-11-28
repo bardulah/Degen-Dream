@@ -7,10 +7,9 @@ This guide covers all the advanced features added to the Bratislava Betting Synd
 1. [Automated Result Updates](#automated-result-updates)
 2. [Notification System](#notification-system)
 3. [Multi-Source Score Fallback](#multi-source-score-fallback)
-4. [CLV (Closing Line Value) Tracking](#clv-tracking)
-5. [Bet Recommendation Engine](#bet-recommendation-engine)
-6. [Historical Performance Analyzer](#historical-performance-analyzer)
-7. [Setup & Configuration](#setup--configuration)
+4. [Bet Recommendation Engine](#bet-recommendation-engine)
+5. [Historical Performance Analyzer](#historical-performance-analyzer)
+6. [Setup & Configuration](#setup--configuration)
 
 ---
 
@@ -204,69 +203,6 @@ health = fetcher.get_health_status()
 - ✅ No code changes needed
 - ✅ Automatic fallback
 - ✅ Health monitoring
-
----
-
-## 🎯 CLV (Closing Line Value) Tracking
-
-**File:** `analytics/clv_tracker.py`
-
-**Database:** Added `closing_odds`, `clv_percentage`, `beat_closing_line` to Bet table
-
-CLV is the #1 indicator of long-term profitability. If you beat the closing line, you're a winning bettor.
-
-### What is CLV?
-
-**Closing Line Value** = Difference between your bet odds and the closing odds.
-
-**Example:**
-- You bet Lakers @ 2.10
-- Closing odds: Lakers @ 2.00
-- CLV = +5.0% (you got better odds)
-
-**Why It Matters:**
-- Positive CLV → Long-term winner
-- Negative CLV → Long-term loser
-
-### Usage
-
-```python
-from analytics.clv_tracker import CLVTracker
-
-tracker = CLVTracker()
-
-# Calculate CLV
-clv = tracker.calculate_clv(bet_odds=2.10, closing_odds=2.00)
-# Result: +5.0%
-
-# Update bet with closing odds
-tracker.update_bet_clv(
-    bet_id="abc123...",
-    closing_odds=2.00
-)
-
-# Get CLV statistics
-stats = tracker.get_clv_stats(days=30)
-# {
-#     'average_clv': 2.5,
-#     'beat_closing_line_pct': 58.0,
-#     'positive_clv_count': 23,
-#     'negative_clv_count': 17
-# }
-
-# Analyze CLV vs actual results
-analysis = tracker.analyze_clv_vs_results()
-# Shows if beating closing line = winning
-```
-
-### Database Schema
-
-```python
-# Added to Bet model:
-closing_odds = Column(Float, nullable=True)
-clv_percentage = Column(Float, nullable=True)
-beat_closing_line = Column(Boolean, nullable=True)
-```
 
 ---
 
