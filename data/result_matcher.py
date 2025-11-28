@@ -15,6 +15,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional, Tuple
 from sqlalchemy.orm import Session
+from sqlalchemy import or_
 from difflib import SequenceMatcher
 import time
 
@@ -214,7 +215,7 @@ class ResultMatcher:
         # Get pending bets for this date
         query = self.db.query(Bet).filter(
             Bet.game_date == date_str,
-            Bet.result_status.in_([None, 'pending'])
+            or_(Bet.result_status == None, Bet.result_status == 'pending')
         )
 
         if simulation_id:

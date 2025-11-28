@@ -248,7 +248,7 @@ class BetRecommender:
         query = self.db.query(
             Bet.agent_name,
             func.count(Bet.id).label('total_bets'),
-            func.sum(func.case((Bet.result_status == 'won', 1), else_=0)).label('wins'),
+            func.sum(func.case((Bet.result_status == 'won',  1), else_=0)).label('wins'),
             func.sum(Bet.profit_loss).label('total_profit'),
             func.sum(Bet.stake).label('total_wagered')
         ).filter(
