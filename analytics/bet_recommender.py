@@ -245,10 +245,10 @@ class BetRecommender:
             List of top agents with their stats
         """
         # Get all agent stats for this sport
+        # First get total bets, profit, and wagered
         query = self.db.query(
             Bet.agent_name,
             func.count(Bet.id).label('total_bets'),
-            func.sum(func.case((Bet.result_status == 'won',  1), else_=0)).label('wins'),
             func.sum(Bet.profit_loss).label('total_profit'),
             func.sum(Bet.stake).label('total_wagered')
         ).filter(
@@ -257,9 +257,16 @@ class BetRecommender:
         ).group_by(Bet.agent_name).all()
 
         agents = []
-        for agent_name, total_bets, wins, total_profit, total_wagered in query:
+        for agent_name, total_bets, total_profit, total_wagered in query:
             if total_bets < self.min_sample_size:
                 continue
+
+            # Get wins separately
+            wins = self.db.query(func.count(Bet.id)).filter(
+                Bet.agent_name == agent_name,
+                Bet.sport == sport,
+                Bet.result_status == 'won'
+            ).scalar() or 0
 
             win_rate = (wins / total_bets) * 100 if total_bets > 0 else 0.0
             roi = (total_profit / total_wagered) * 100 if total_wagered > 0 else 0.0
