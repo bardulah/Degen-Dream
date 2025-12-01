@@ -1,0 +1,948 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BBS TERMINAL - SCROLLABLE</title>
+    <script src="https://cdn.socket.io/4.6.0/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #000000;
+            --panel-bg: #0a0a0a;
+            --border-color: #333333;
+            --text-primary: #e0e0e0;
+            --text-secondary: #888888;
+            --accent-green: #00ff00;
+            --accent-red: #ff0000;
+            --accent-blue: #00ccff;
+            --accent-amber: #ffb000;
+            --font-mono: 'Roboto Mono', monospace;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html, body {
+            height: 100%;
+            overflow: hidden;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            font-family: var(--font-mono);
+            font-size: 13px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Scrollbars */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--bg-color);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+            border: 1px solid var(--bg-color);
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+
+        /* Top Bar */
+        .top-bar {
+            height: 30px;
+            background: var(--panel-bg);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            padding: 0 10px;
+            justify-content: space-between;
+            flex-shrink: 0;
+        }
+
+        .logo {
+            color: var(--accent-amber);
+            font-weight: 700;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        .status-indicators {
+            display: flex;
+            gap: 15px;
+        }
+
+        .indicator {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 11px;
+            color: var(--text-secondary);
+        }
+
+        .led {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: #333;
+        }
+
+        .led.on {
+            background-color: var(--accent-green);
+            box-shadow: 0 0 5px var(--accent-green);
+        }
+
+        /* Ticker */
+        .ticker-wrap {
+            height: 24px;
+            background: #000;
+            border-bottom: 1px solid var(--border-color);
+            overflow: hidden;
+            white-space: nowrap;
+            display: flex;
+            align-items: center;
+            flex-shrink: 0;
+        }
+
+        .ticker {
+            display: inline-block;
+            animation: ticker 30s linear infinite;
+            padding-left: 100%;
+        }
+
+        .ticker-item {
+            display: inline-block;
+            padding: 0 20px;
+            font-size: 11px;
+        }
+
+        .ticker-up {
+            color: var(--accent-green);
+        }
+
+        .ticker-down {
+            color: var(--accent-red);
+        }
+
+        @keyframes ticker {
+            0% {
+                transform: translate3d(0, 0, 0);
+            }
+
+            100% {
+                transform: translate3d(-100%, 0, 0);
+            }
+        }
+
+        /* CRITICAL FIX: Main Grid - Proper flex layout */
+        .main-grid {
+            flex: 1;
+            display: grid;
+            grid-template-columns: 300px 1fr 350px;
+            grid-template-rows: 1fr 250px;
+            gap: 1px;
+            background-color: var(--border-color);
+            min-height: 0;
+            height: calc(100vh - 54px); /* Account for top bar + ticker */
+        }
+
+        .panel {
+            background-color: var(--bg-color);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            min-height: 0;
+        }
+
+        .panel-header {
+            height: 24px;
+            background: var(--panel-bg);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            padding: 0 8px;
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--accent-blue);
+            text-transform: uppercase;
+            justify-content: space-between;
+            flex-shrink: 0;
+        }
+
+        /* CRITICAL FIX: Panel content - Proper scrolling */
+        .panel-content {
+            flex: 1;
+            overflow-y: auto;
+            position: relative;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Specific Panel Layouts */
+        .market-overview {
+            grid-column: 1;
+            grid-row: 1 / span 2;
+        }
+
+        .live-terminal {
+            grid-column: 2;
+            grid-row: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .order-book {
+            grid-column: 3;
+            grid-row: 1 / span 2;
+        }
+
+        .chart-panel {
+            grid-column: 2;
+            grid-row: 2;
+        }
+
+        /* Data Tables */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 11px;
+        }
+
+        th {
+            text-align: left;
+            padding: 4px 8px;
+            color: var(--text-secondary);
+            border-bottom: 1px solid var(--border-color);
+            font-weight: normal;
+            position: sticky;
+            top: 0;
+            background: var(--panel-bg);
+        }
+
+        td {
+            padding: 4px 8px;
+            border-bottom: 1px solid #1a1a1a;
+        }
+
+        tr:hover {
+            background-color: #111;
+        }
+
+        .val-up {
+            color: var(--accent-green);
+        }
+
+        .val-down {
+            color: var(--accent-red);
+        }
+
+        .val-neutral {
+            color: var(--text-secondary);
+        }
+
+        /* CRITICAL FIX: Terminal Chat - Proper scrolling container */
+        .terminal-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+            overflow: hidden;
+        }
+
+        .game-header {
+            flex-shrink: 0;
+            display: flex;
+            justify-content: space-between;
+            padding: 15px;
+            border-bottom: 1px solid var(--border-color);
+            background: #050505;
+        }
+
+        .terminal-feed {
+            flex: 1;
+            padding: 5px;
+            font-family: var(--font-mono);
+            overflow-y: auto;
+            overflow-x: hidden;
+            min-height: 0;
+            scroll-behavior: smooth;
+        }
+
+        .log-entry {
+            margin-bottom: 4px;
+            line-height: 1.4;
+            border-left: 2px solid transparent;
+            padding-left: 5px;
+            word-break: break-word;
+        }
+
+        .log-entry:hover {
+            background: #0a0a0a;
+        }
+
+        .log-time {
+            color: var(--text-secondary);
+            margin-right: 8px;
+            flex-shrink: 0;
+        }
+
+        .log-agent {
+            font-weight: 700;
+            margin-right: 8px;
+            flex-shrink: 0;
+        }
+
+        .agent-sharp {
+            color: var(--accent-blue);
+        }
+
+        .agent-insider {
+            color: var(--accent-amber);
+        }
+
+        .agent-degen {
+            color: var(--accent-red);
+        }
+
+        .agent-bookie {
+            color: var(--accent-green);
+        }
+
+        .log-msg {
+            color: var(--text-primary);
+            flex: 1;
+        }
+
+        /* Game Display */
+        .team-box {
+            text-align: center;
+            width: 40%;
+        }
+
+        .team-name {
+            font-size: 14px;
+            font-weight: 700;
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        .team-odds {
+            font-size: 18px;
+            color: var(--accent-green);
+        }
+
+        .vs-divider {
+            display: flex;
+            align-items: center;
+            color: var(--text-secondary);
+            font-size: 10px;
+        }
+
+        /* Stats Grid */
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1px;
+            background: var(--border-color);
+            margin-bottom: 1px;
+        }
+
+        .stat-cell {
+            background: var(--bg-color);
+            padding: 10px;
+        }
+
+        .stat-label {
+            font-size: 10px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+        }
+
+        .stat-value {
+            font-size: 16px;
+            font-weight: 700;
+            margin-top: 2px;
+        }
+
+        /* Buttons */
+        .action-btn {
+            background: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 4px 12px;
+            font-family: var(--font-mono);
+            font-size: 11px;
+            cursor: pointer;
+            text-transform: uppercase;
+            flex-shrink: 0;
+        }
+
+        .action-btn:hover {
+            background: #222;
+            border-color: var(--text-secondary);
+        }
+
+        .action-btn.primary {
+            border-color: var(--accent-green);
+            color: var(--accent-green);
+        }
+
+        .action-btn.primary:hover {
+            background: rgba(0, 255, 0, 0.1);
+        }
+
+        /* Order Book Style Bets */
+        .order-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 4px 8px;
+            border-bottom: 1px solid #111;
+            font-size: 11px;
+        }
+
+        .order-side {
+            width: 4px;
+            margin-right: 8px;
+        }
+
+        .side-buy {
+            background: var(--accent-green);
+        }
+
+        .side-sell {
+            background: var(--accent-red);
+        }
+
+        /* Responsive */
+        @media (max-width: 1200px) {
+            .main-grid {
+                grid-template-columns: 250px 1fr 300px;
+            }
+        }
+
+        @media (max-width: 900px) {
+            .main-grid {
+                grid-template-columns: 1fr;
+                grid-template-rows: auto;
+                height: auto;
+                min-height: calc(100vh - 54px);
+            }
+            
+            .market-overview,
+            .order-book,
+            .chart-panel {
+                grid-column: 1;
+                grid-row: auto;
+                min-height: 300px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Top Bar -->
+    <div class="top-bar">
+        <div class="logo">BBS TERMINAL <span style="font-size: 10px; color: #555;">v3.2 SCROLLABLE</span></div>
+        <div class="status-indicators">
+            <div class="indicator">
+                <div class="led on" id="connLed"></div>
+                <span>NET: ONLINE</span>
+            </div>
+            <div class="indicator">
+                <div class="led" id="feedLed"></div>
+                <span>FEED: LIVE</span>
+            </div>
+            <div class="indicator">
+                <div class="led on"></div>
+                <span>SYS: NOMINAL</span>
+            </div>
+        </div>
+        <div>
+            <button class="action-btn primary" onclick="openConfig()">⚙️ CONFIG & START</button>
+            <button class="action-btn" onclick="stopSimulation()" id="stopBtn" style="display: none; background: rgba(255,0,0,0.1); border-color: var(--accent-red); color: var(--accent-red);">⏹ STOP</button>
+            <button class="action-btn" onclick="window.location.reload()">RESET</button>
+        </div>
+    </div>
+
+    <!-- Ticker -->
+    <div class="ticker-wrap">
+        <div class="ticker">
+            <div class="ticker-item">BTC/USD <span class="ticker-up">98,420.50 ▲</span></div>
+            <div class="ticker-item">EUR/USD <span class="ticker-down">1.0542 ▼</span></div>
+            <div class="ticker-item">MAN UTD <span class="ticker-up">1.87 ▲</span></div>
+            <div class="ticker-item">REAL MADRID <span class="ticker-down">1.45 ▼</span></div>
+            <div class="ticker-item">LAKERS <span class="ticker-up">1.90 ▲</span></div>
+            <div class="ticker-item">BBS INDEX <span class="ticker-up">1,245.32 ▲</span></div>
+        </div>
+    </div>
+
+    <!-- Main Grid -->
+    <div class="main-grid">
+
+        <!-- Left Panel: Market Overview -->
+        <div class="panel market-overview">
+            <div class="panel-header">
+                <span>PORTFOLIO METRICS</span>
+                <span>[P1]</span>
+            </div>
+            <div class="panel-content">
+                <div class="stats-row">
+                    <div class="stat-cell">
+                        <div class="stat-label">Total Equity</div>
+                        <div class="stat-value" id="bankroll">€10,000.00</div>
+                    </div>
+                    <div class="stat-cell">
+                        <div class="stat-label">Daily P&L</div>
+                        <div class="stat-value val-neutral" id="pnl">€0.00</div>
+                    </div>
+                </div>
+                <div class="stats-row">
+                    <div class="stat-cell">
+                        <div class="stat-label">ROI %</div>
+                        <div class="stat-value val-neutral" id="roi">0.00%</div>
+                    </div>
+                    <div class="stat-cell">
+                        <div class="stat-label">Win Rate</div>
+                        <div class="stat-value" id="winRate">0.0%</div>
+                    </div>
+                </div>
+                <div class="stats-row">
+                    <div class="stat-cell">
+                        <div class="stat-label">Open Exposure</div>
+                        <div class="stat-value" id="exposure">€0.00</div>
+                    </div>
+                    <div class="stat-cell">
+                        <div class="stat-label">Sharpe Ratio</div>
+                        <div class="stat-value">0.00</div>
+                    </div>
+                </div>
+
+                <div class="panel-header" style="margin-top: 1px;">
+                    <span>AGENT PERFORMANCE</span>
+                </div>
+                <table id="agentTable">
+                    <thead>
+                        <tr>
+                            <th>AGENT</th>
+                            <th>TYPE</th>
+                            <th>ROI</th>
+                            <th>W/L</th>
+                        </tr>
+                    </thead>
+                    <tbody id="agentStatsBody">
+                        <!-- Agent rows -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Center Top: Live Terminal -->
+        <div class="panel live-terminal">
+            <div class="panel-header">
+                <span>LIVE FEED // SYNDICATE WIRE</span>
+                <span>[P2]</span>
+            </div>
+
+            <div class="terminal-container">
+                <!-- Active Game Header -->
+                <div id="gameHeader" class="game-header">
+                    <div class="team-box">
+                        <span class="team-name" id="homeTeam">WAITING</span>
+                        <span class="team-odds" id="homeOdds">---</span>
+                    </div>
+                    <div class="vs-divider">VS</div>
+                    <div class="team-box">
+                        <span class="team-name" id="awayTeam">FOR DATA</span>
+                        <span class="team-odds" id="awayOdds">---</span>
+                    </div>
+                </div>
+
+                <!-- CRITICAL FIX: Scrollable terminal feed -->
+                <div class="terminal-feed" id="terminalFeed">
+                    <div class="log-entry">
+                        <span class="log-time">SYSTEM</span>
+                        <span class="log-msg">Scrollable Terminal initialized. Ready for agent analysis...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Panel: Order Book -->
+        <div class="panel order-book">
+            <div class="panel-header">
+                <span>ACTIVE ORDERS</span>
+                <span>[P3]</span>
+            </div>
+            <div class="panel-content">
+                <table style="margin-bottom: 10px;">
+                    <thead>
+                        <tr>
+                            <th>SIDE</th>
+                            <th>ASSET</th>
+                            <th>SIZE</th>
+                            <th>PRICE</th>
+                        </tr>
+                    </thead>
+                    <tbody id="orderBookBody">
+                        <!-- Bets go here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Center Bottom: Charts -->
+        <div class="panel chart-panel">
+            <div class="panel-header">
+                <span>EQUITY CURVE [1M]</span>
+                <span>[P4]</span>
+            </div>
+            <div class="panel-content" style="padding: 5px;">
+                <div id="mainChart" style="height: 100%; width: 100%;"></div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // Socket Connection
+        const socket = io();
+
+        // Chart Setup
+        const chartOptions = {
+            series: [{ name: 'Equity', data: [{ x: 0, y: 10000 }] }],
+            chart: {
+                type: 'area',
+                height: '100%',
+                fontFamily: 'Roboto Mono, monospace',
+                background: '#000000',
+                toolbar: { show: false },
+                animations: { enabled: true, easing: 'linear', dynamicAnimation: { speed: 500 } }
+            },
+            colors: ['#00ff00'],
+            stroke: { curve: 'step', width: 2 },
+            fill: {
+                type: 'gradient',
+                gradient: { shadeIntensity: 1, opacityFrom: 0.3, opacityTo: 0.0, stops: [0, 100] }
+            },
+            dataLabels: { enabled: false },
+            grid: {
+                borderColor: '#333',
+                strokeDashArray: 2,
+                xaxis: { lines: { show: true } },
+                yaxis: { lines: { show: true } },
+            },
+            xaxis: {
+                labels: { style: { colors: '#888' } },
+                axisBorder: { show: false },
+                axisTicks: { show: false }
+            },
+            yaxis: {
+                labels: { style: { colors: '#888' } },
+                opposite: true
+            },
+            theme: { mode: 'dark' }
+        };
+
+        const chart = new ApexCharts(document.querySelector("#mainChart"), chartOptions);
+        chart.render();
+
+        // State
+        let bankrollData = [{ x: 0, y: 10000 }];
+        let gameCount = 0;
+
+        // CRITICAL FIX: Enhanced logging with scroll management
+        function logSystem(msg) {
+            const feed = document.getElementById('terminalFeed');
+            if (!feed) return;
+            
+            const div = document.createElement('div');
+            div.className = 'log-entry';
+            const time = new Date().toLocaleTimeString('en-US', { hour12: false });
+            div.innerHTML = `
+                <span class="log-time">${time}</span>
+                <span class="log-agent" style="color: #555;">SYSTEM</span>
+                <span class="log-msg" style="color: #888;">${msg}</span>
+            `;
+            
+            feed.appendChild(div);
+            
+            // CRITICAL: Ensure scroll to bottom with safety check
+            setTimeout(() => {
+                if (feed.scrollHeight > feed.clientHeight) {
+                    feed.scrollTop = feed.scrollHeight;
+                }
+            }, 10);
+        }
+
+        function startSimulation() {
+            const numGames = parseInt(document.getElementById('numGames').value) || 10;
+            const bankroll = parseInt(document.getElementById('startingBankroll').value) || 10000;
+            const sport = document.getElementById('sportSelect').value;
+            const kelly = parseFloat(document.getElementById('kellyFraction').value) || 0.25;
+            const useLive = document.getElementById('useLiveData').checked;
+
+            // Reset chart data
+            gameCount = 0;
+            bankrollData = [{ x: 0, y: bankroll }];
+            chart.updateSeries([{ name: 'Equity', data: bankrollData }]);
+
+            // Reset stats display
+            document.getElementById('bankroll').textContent = `€${bankroll.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            document.getElementById('pnl').textContent = '€0.00';
+            document.getElementById('roi').textContent = '0.00%';
+            document.getElementById('winRate').textContent = '0.0%';
+
+            logSystem('Initiating simulation sequence...');
+            logSystem(`Config: ${numGames} games, €${bankroll} bankroll, Kelly: ${kelly}`);
+            logSystem(`Sport: ${sport}, Data: ${useLive ? 'LIVE' : 'SAMPLE'}`);
+
+            socket.emit('start_simulation', {
+                num_games: numGames,
+                starting_bankroll: bankroll,
+                sport: sport,
+                kelly_fraction: kelly,
+                use_live_data: useLive
+            });
+
+            document.getElementById('stopBtn').style.display = 'inline-block';
+        }
+
+        function openConfig() {
+            document.getElementById('configModal').style.display = 'flex';
+        }
+
+        function closeConfig() {
+            document.getElementById('configModal').style.display = 'none';
+        }
+
+        function confirmConfig() {
+            closeConfig();
+            startSimulation();
+        }
+
+        function stopSimulation() {
+            socket.emit('stop_simulation');
+            document.getElementById('stopBtn').style.display = 'none';
+            logSystem('STOP signal sent - halting simulation...');
+        }
+
+        // Socket Events
+        socket.on('connect', () => {
+            logSystem('Connected to BBS Network Node.');
+            document.getElementById('connLed').classList.add('on');
+        });
+
+        socket.on('disconnect', () => {
+            logSystem('Connection lost. Reconnecting...');
+            document.getElementById('connLed').classList.remove('on');
+        });
+
+        socket.on('new_game', (game) => {
+            document.getElementById('homeTeam').innerText = game.home_team;
+            document.getElementById('awayTeam').innerText = game.away_team;
+            document.getElementById('homeOdds').innerText = game.home_odds;
+            document.getElementById('awayOdds').innerText = game.away_odds;
+
+            logSystem(`MARKET OPEN: ${game.home_team} vs ${game.away_team} [${game.sport}]`);
+
+            // Blink feed LED
+            const led = document.getElementById('feedLed');
+            led.classList.add('on');
+            setTimeout(() => led.classList.remove('on'), 200);
+        });
+
+        socket.on('agent_message', (data) => {
+            const feed = document.getElementById('terminalFeed');
+            if (!feed) return;
+
+            const div = document.createElement('div');
+            div.className = 'log-entry';
+
+            const time = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+            let agentClass = '';
+            if (data.agent_type === 'sharp') agentClass = 'agent-sharp';
+            if (data.agent_type === 'insider') agentClass = 'agent-insider';
+            if (data.agent_type === 'degen') agentClass = 'agent-degen';
+            if (data.agent_type === 'bookie') agentClass = 'agent-bookie';
+
+            div.innerHTML = `
+                <span class="log-time">${time}</span>
+                <span class="log-agent ${agentClass}">${data.agent_name}</span>
+                <span class="log-msg">${data.response}</span>
+            `;
+
+            feed.appendChild(div);
+            
+            // CRITICAL: Ensure scroll to bottom
+            setTimeout(() => {
+                if (feed.scrollHeight > feed.clientHeight) {
+                    feed.scrollTop = feed.scrollHeight;
+                }
+            }, 10);
+
+            if (data.decision) {
+                const decDiv = document.createElement('div');
+                decDiv.className = 'log-entry';
+                decDiv.innerHTML = `
+                    <span class="log-time">${time}</span>
+                    <span class="log-agent">>>></span>
+                    <span class="log-msg" style="color: var(--accent-green)">ORDER SUBMITTED: ${data.decision.bet_type} ${data.decision.team} @ ${data.decision.odds}</span>
+                `;
+                feed.appendChild(decDiv);
+                
+                // CRITICAL: Ensure scroll to bottom after decision
+                setTimeout(() => {
+                    if (feed.scrollHeight > feed.clientHeight) {
+                        feed.scrollTop = feed.scrollHeight;
+                    }
+                }, 10);
+            }
+        });
+
+        socket.on('new_bet', (bet) => {
+            const tbody = document.getElementById('orderBookBody');
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td style="display:flex; align-items:center;"><div class="order-side side-buy"></div> BUY</td>
+                <td>${bet.team}</td>
+                <td>€${bet.stake}</td>
+                <td style="color: var(--accent-green)">${bet.odds}</td>
+            `;
+            tbody.insertBefore(row, tbody.firstChild);
+
+            if (tbody.children.length > 15) tbody.removeChild(tbody.lastChild);
+        });
+
+        socket.on('notification', (data) => {
+            let color = '#888';
+            if (data.type === 'error') color = 'var(--accent-red)';
+            if (data.type === 'success') color = 'var(--accent-green)';
+            if (data.type === 'warning') color = 'var(--accent-amber)';
+            
+            logSystem(`[${data.type.toUpperCase()}] ${data.message}`, color);
+        });
+
+        socket.on('stats_update', (stats) => {
+            document.getElementById('bankroll').textContent = `€${stats.bankroll.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            document.getElementById('pnl').textContent = `€${stats.pnl.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            document.getElementById('roi').textContent = `${stats.roi.toFixed(2)}%`;
+            document.getElementById('winRate').textContent = `${stats.win_rate.toFixed(1)}%`;
+
+            // Update P&L color
+            const pnlElement = document.getElementById('pnl');
+            if (stats.pnl > 0) {
+                pnlElement.className = 'stat-value val-up';
+            } else if (stats.pnl < 0) {
+                pnlElement.className = 'stat-value val-down';
+            } else {
+                pnlElement.className = 'stat-value val-neutral';
+            }
+
+            // Update ROI color
+            const roiElement = document.getElementById('roi');
+            if (stats.roi > 0) {
+                roiElement.className = 'stat-value val-up';
+            } else if (stats.roi < 0) {
+                roiElement.className = 'stat-value val-down';
+            } else {
+                roiElement.className = 'stat-value val-neutral';
+            }
+
+            // Update chart
+            gameCount++;
+            bankrollData.push({ x: gameCount, y: stats.bankroll });
+            chart.updateSeries([{ name: 'Equity', data: bankrollData }]);
+        });
+
+        // Enhanced resize handling
+        window.addEventListener('resize', function() {
+            // Ensure terminal stays scrolled to bottom on resize
+            const feed = document.getElementById('terminalFeed');
+            if (feed && feed.scrollHeight > feed.clientHeight) {
+                feed.scrollTop = feed.scrollHeight;
+            }
+        });
+    </script>
+
+    <!-- Configuration Modal -->
+    <div id="configModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 9999; justify-content: center; align-items: center;">
+        <div style="background: var(--panel-bg); border: 2px solid var(--accent-green); padding: 20px; min-width: 400px; max-width: 500px; max-height: 85vh; overflow-y: auto;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid var(--border-color); padding-bottom: 10px;">
+                <span style="color: var(--accent-green); font-weight: 700; font-size: 14px;">⚙️ SIMULATION CONFIG</span>
+                <button onclick="closeConfig()" style="background: none; border: none; color: var(--accent-red); cursor: pointer; font-size: 18px;">&times;</button>
+            </div>
+
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; font-size: 10px; color: var(--text-secondary); margin-bottom: 5px;">NUMBER OF GAMES</label>
+                <input type="number" id="numGames" value="10" min="1" max="100"
+                       style="width: 100%; background: var(--bg-color); border: 1px solid var(--border-color); color: var(--text-primary); padding: 8px; font-family: var(--font-mono); font-size: 13px;">
+            </div>
+
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; font-size: 10px; color: var(--text-secondary); margin-bottom: 5px;">STARTING BANKROLL (€)</label>
+                <input type="number" id="startingBankroll" value="10000" min="1000" max="100000" step="1000"
+                       style="width: 100%; background: var(--bg-color); border: 1px solid var(--border-color); color: var(--text-primary); padding: 8px; font-family: var(--font-mono); font-size: 13px;">
+            </div>
+
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; font-size: 10px; color: var(--text-secondary); margin-bottom: 5px;">SPORT SELECTION</label>
+                <select id="sportSelect"
+                        style="width: 100%; background: var(--bg-color); border: 1px solid var(--border-color); color: var(--text-primary); padding: 8px; font-family: var(--font-mono); font-size: 13px;">
+                    <option value="soccer">⚽ Soccer / Football</option>
+                    <option value="basketball">🏀 Basketball</option>
+                    <option value="hockey">🏒 Ice Hockey</option>
+                    <option value="tennis">🎾 Tennis</option>
+                    <option value="multi">🎯 Multi-Sport Mix</option>
+                </select>
+            </div>
+
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; font-size: 10px; color: var(--text-secondary); margin-bottom: 5px;">KELLY FRACTION (Risk Level)</label>
+                <input type="range" id="kellyFraction" value="0.25" min="0.1" max="0.5" step="0.05"
+                       style="width: 100%;" oninput="document.getElementById('kellyValue').innerText = this.value">
+                <div style="display: flex; justify-content: space-between; font-size: 10px; margin-top: 3px;">
+                    <span style="color: var(--accent-green);">Conservative (0.1)</span>
+                    <span id="kellyValue" style="color: var(--accent-amber); font-weight: 700;">0.25</span>
+                    <span style="color: var(--accent-red);">Aggressive (0.5)</span>
+                </div>
+            </div>
+
+            <div style="margin-bottom: 20px;">
+                <label style="display: flex; align-items: center; font-size: 12px; color: var(--text-primary); cursor: pointer;">
+                    <input type="checkbox" id="useLiveData" checked style="margin-right: 8px; transform: scale(1.2);">
+                    <span>USE LIVE REAL-TIME ODDS</span>
+                </label>
+                <div style="font-size: 9px; color: var(--text-secondary); margin-top: 3px; margin-left: 24px;">
+                    ℹ️ Checked = Live Data (Slower) | Unchecked = Sample Data (Instant)
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 10px;">
+                <button onclick="confirmConfig()" class="action-btn primary" style="flex: 1; padding: 10px;">
+                    CONFIRM & START
+                </button>
+                <button onclick="closeConfig()" class="action-btn" style="flex: 0.4; padding: 10px;">
+                    CANCEL
+                </button>
+            </div>
+        </div>
+    </div>
+
+</body>
+
+</html>

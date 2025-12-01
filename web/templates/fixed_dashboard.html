@@ -1,0 +1,1852 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BBS TERMINAL v3.1 - FIXED</title>
+    <script src="https://cdn.socket.io/4.6.0/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #000000;
+            --panel-bg: #0a0a0a;
+            --border-color: #333333;
+            --text-primary: #e0e0e0;
+            --text-secondary: #888888;
+            --accent-green: #00ff00;
+            --accent-red: #ff0000;
+            --accent-blue: #00ccff;
+            --accent-amber: #ffb000;
+            --font-mono: 'Roboto Mono', monospace;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            font-family: var(--font-mono);
+            font-size: 13px;
+            /* FIXED: Allow scrolling instead of hiding overflow */
+            overflow: auto;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Scrollbars */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--bg-color);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+            border: 1px solid var(--bg-color);
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+
+        /* Top Bar */
+        .top-bar {
+            height: 30px;
+            background: var(--panel-bg);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            padding: 0 10px;
+            justify-content: space-between;
+            flex-shrink: 0;
+        }
+
+        .logo {
+            color: var(--accent-amber);
+            font-weight: 700;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        .status-indicators {
+            display: flex;
+            gap: 15px;
+        }
+
+        .indicator {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 11px;
+            color: var(--text-secondary);
+        }
+
+        .led {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: #333;
+        }
+
+        .led.on {
+            background-color: var(--accent-green);
+            box-shadow: 0 0 5px var(--accent-green);
+        }
+
+        /* Ticker */
+        .ticker-wrap {
+            height: 24px;
+            background: #000;
+            border-bottom: 1px solid var(--border-color);
+            overflow: hidden;
+            white-space: nowrap;
+            display: flex;
+            align-items: center;
+            flex-shrink: 0;
+        }
+
+        .ticker {
+            display: inline-block;
+            animation: ticker 30s linear infinite;
+            padding-left: 100%;
+        }
+
+        .ticker-item {
+            display: inline-block;
+            padding: 0 20px;
+            font-size: 11px;
+        }
+
+        .ticker-up {
+            color: var(--accent-green);
+        }
+
+        .ticker-down {
+            color: var(--accent-red);
+        }
+
+        @keyframes ticker {
+            0% {
+                transform: translate3d(0, 0, 0);
+            }
+
+            100% {
+                transform: translate3d(-100%, 0, 0);
+            }
+        }
+
+        /* FIXED: Main Grid - Allow flexible height instead of fixed viewport */
+        .main-grid {
+            flex-grow: 1;
+            display: grid;
+            grid-template-columns: 300px 1fr 350px;
+            grid-template-rows: 1fr 250px;
+            gap: 1px;
+            background-color: var(--border-color);
+            min-height: 0; /* Allow grid to shrink */
+        }
+
+        .panel {
+            background-color: var(--bg-color);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            height: 100%;
+            min-height: 0; /* Allow panels to shrink */
+        }
+
+        .panel-header {
+            height: 24px;
+            background: var(--panel-bg);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            padding: 0 8px;
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--accent-blue);
+            text-transform: uppercase;
+            justify-content: space-between;
+            flex-shrink: 0;
+        }
+
+        /* FIXED: Panel content - Better scroll handling */
+        .panel-content {
+            flex-grow: 1;
+            overflow-y: auto;
+            position: relative;
+            min-height: 0;
+        }
+
+        /* Specific Panels */
+        .market-overview {
+            grid-column: 1;
+            grid-row: 1 / span 2;
+        }
+
+        .live-terminal {
+            grid-column: 2;
+            grid-row: 1;
+        }
+
+        .order-book {
+            grid-column: 3;
+            grid-row: 1 / span 2;
+        }
+
+        .chart-panel {
+            grid-column: 2;
+            grid-row: 2;
+        }
+
+        /* Data Tables */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 11px;
+        }
+
+        th {
+            text-align: left;
+            padding: 4px 8px;
+            color: var(--text-secondary);
+            border-bottom: 1px solid var(--border-color);
+            font-weight: normal;
+            position: sticky;
+            top: 0;
+            background: var(--panel-bg);
+        }
+
+        td {
+            padding: 4px 8px;
+            border-bottom: 1px solid #1a1a1a;
+        }
+
+        tr:hover {
+            background-color: #111;
+        }
+
+        .val-up {
+            color: var(--accent-green);
+        }
+
+        .val-down {
+            color: var(--accent-red);
+        }
+
+        .val-neutral {
+            color: var(--text-secondary);
+        }
+
+        /* Terminal Chat */
+        .terminal-feed {
+            padding: 5px;
+            font-family: var(--font-mono);
+        }
+
+        .log-entry {
+            margin-bottom: 4px;
+            line-height: 1.4;
+            border-left: 2px solid transparent;
+            padding-left: 5px;
+        }
+
+        .log-entry:hover {
+            background: #0a0a0a;
+        }
+
+        .log-time {
+            color: var(--text-secondary);
+            margin-right: 8px;
+        }
+
+        .log-agent {
+            font-weight: 700;
+            margin-right: 8px;
+        }
+
+        .agent-sharp {
+            color: var(--accent-blue);
+        }
+
+        .agent-insider {
+            color: var(--accent-amber);
+        }
+
+        .agent-degen {
+            color: var(--accent-red);
+        }
+
+        .agent-bookie {
+            color: var(--accent-green);
+        }
+
+        .log-msg {
+            color: var(--text-primary);
+        }
+
+        /* Game Display */
+        .game-header {
+            display: flex;
+            justify-content: space-between;
+            padding: 15px;
+            border-bottom: 1px solid var(--border-color);
+            background: #050505;
+            flex-shrink: 0;
+        }
+
+        .team-box {
+            text-align: center;
+            width: 40%;
+        }
+
+        .team-name {
+            font-size: 14px;
+            font-weight: 700;
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        .team-odds {
+            font-size: 18px;
+            color: var(--accent-green);
+        }
+
+        .vs-divider {
+            display: flex;
+            align-items: center;
+            color: var(--text-secondary);
+            font-size: 10px;
+        }
+
+        /* Stats Grid */
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1px;
+            background: var(--border-color);
+            margin-bottom: 1px;
+        }
+
+        .stat-cell {
+            background: var(--bg-color);
+            padding: 10px;
+        }
+
+        .stat-label {
+            font-size: 10px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+        }
+
+        .stat-value {
+            font-size: 16px;
+            font-weight: 700;
+            margin-top: 2px;
+        }
+
+        /* Buttons */
+        .action-btn {
+            background: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 4px 12px;
+            font-family: var(--font-mono);
+            font-size: 11px;
+            cursor: pointer;
+            text-transform: uppercase;
+        }
+
+        .action-btn:hover {
+            background: #222;
+            border-color: var(--text-secondary);
+        }
+
+        .action-btn.primary {
+            border-color: var(--accent-green);
+            color: var(--accent-green);
+        }
+
+        .action-btn.primary:hover {
+            background: rgba(0, 255, 0, 0.1);
+        }
+
+        /* FIXED: League Selection Styles */
+        .league-selection {
+            margin-bottom: 15px;
+        }
+
+        .league-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+            max-height: 200px;
+            overflow-y: auto;
+            margin-top: 8px;
+        }
+
+        .league-item {
+            background: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            padding: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 10px;
+            user-select: none; /* FIXED: Prevent text selection on click */
+        }
+
+        .league-item:hover {
+            border-color: var(--accent-blue);
+            background: #111;
+        }
+
+        .league-item.selected {
+            border-color: var(--accent-green);
+            background: rgba(0, 255, 0, 0.1);
+        }
+
+        .league-name {
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 2px;
+        }
+
+        .league-info {
+            color: var(--text-secondary);
+            font-size: 9px;
+        }
+
+        .agent-composition {
+            margin-bottom: 15px;
+        }
+
+        .agent-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .agent-item {
+            background: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            padding: 8px;
+            text-align: center;
+            font-size: 10px;
+        }
+
+        .agent-count {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-top: 4px;
+        }
+
+        .agent-count button {
+            background: var(--bg-color);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .agent-count button:hover {
+            border-color: var(--accent-blue);
+        }
+
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.9);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 10000;
+        }
+
+        .loading-content {
+            text-align: center;
+            color: var(--accent-green);
+        }
+
+        .spinner {
+            border: 2px solid var(--border-color);
+            border-top: 2px solid var(--accent-green);
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* FIXED: Modal content - Better sizing for different screens */
+        #configModal > div {
+            max-height: 85vh;
+            overflow-y: auto;
+        }
+
+        /* FIXED: Responsive adjustments for smaller screens */
+        @media (max-width: 1200px) {
+            .main-grid {
+                grid-template-columns: 250px 1fr 300px;
+            }
+        }
+
+        @media (max-width: 900px) {
+            .main-grid {
+                grid-template-columns: 1fr;
+                grid-template-rows: auto;
+            }
+            
+            .market-overview,
+            .order-book,
+            .chart-panel {
+                grid-column: 1;
+                grid-row: auto;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Top Bar -->
+    <div class="top-bar">
+        <div class="logo">BBS TERMINAL <span style="font-size: 10px; color: #555;">v3.1 FIXED</span></div>
+        <div class="status-indicators">
+            <div class="indicator">
+                <div class="led on" id="connLed"></div>
+                <span>NET: ONLINE</span>
+            </div>
+            <div class="indicator">
+                <div class="led" id="feedLed"></div>
+                <span>FEED: LIVE</span>
+            </div>
+            <div class="indicator">
+                <div class="led on"></div>
+                <span>SYS: NOMINAL</span>
+            </div>
+        </div>
+        <div>
+            <button class="action-btn primary" onclick="openConfig()">⚙️ CONFIG & START</button>
+            <button class="action-btn" onclick="stopSimulation()" id="stopBtn" style="display: none; background: rgba(255,0,0,0.1); border-color: var(--accent-red); color: var(--accent-red);">⏹ STOP</button>
+            <button class="action-btn" onclick="window.location.reload()">RESET</button>
+        </div>
+    </div>
+
+    <!-- Ticker -->
+    <div class="ticker-wrap">
+        <div class="ticker">
+            <div class="ticker-item">BTC/USD <span class="ticker-up">98,420.50 ▲</span></div>
+            <div class="ticker-item">EUR/USD <span class="ticker-down">1.0542 ▼</span></div>
+            <div class="ticker-item">MAN UTD <span class="ticker-up">1.87 ▲</span></div>
+            <div class="ticker-item">REAL MADRID <span class="ticker-down">1.45 ▼</span></div>
+            <div class="ticker-item">LAKERS <span class="ticker-up">1.90 ▲</span></div>
+            <div class="ticker-item">BBS INDEX <span class="ticker-up">1,245.32 ▲</span></div>
+        </div>
+    </div>
+
+    <!-- Main Grid -->
+    <div class="main-grid">
+
+        <!-- Left Panel: Market Overview -->
+        <div class="panel market-overview">
+            <div class="panel-header">
+                <span>PORTFOLIO METRICS</span>
+                <span>[P1]</span>
+            </div>
+            <div class="panel-content">
+                <div class="stats-row">
+                    <div class="stat-cell">
+                        <div class="stat-label">Total Equity</div>
+                        <div class="stat-value" id="bankroll">€10,000.00</div>
+                    </div>
+                    <div class="stat-cell">
+                        <div class="stat-label">Daily P&L</div>
+                        <div class="stat-value val-neutral" id="pnl">€0.00</div>
+                    </div>
+                </div>
+                <div class="stats-row">
+                    <div class="stat-cell">
+                        <div class="stat-label">ROI %</div>
+                        <div class="stat-value val-neutral" id="roi">0.00%</div>
+                    </div>
+                    <div class="stat-cell">
+                        <div class="stat-label">Win Rate</div>
+                        <div class="stat-value" id="winRate">0.0%</div>
+                    </div>
+                </div>
+                <div class="stats-row">
+                    <div class="stat-cell">
+                        <div class="stat-label">Open Exposure</div>
+                        <div class="stat-value" id="exposure">€0.00</div>
+                    </div>
+                    <div class="stat-cell">
+                        <div class="stat-label">Sharpe Ratio</div>
+                        <div class="stat-value">0.00</div>
+                    </div>
+                </div>
+
+                <div class="panel-header" style="margin-top: 1px;">
+                    <span>AGENT PERFORMANCE</span>
+                </div>
+                <table id="agentTable">
+                    <thead>
+                        <tr>
+                            <th>AGENT</th>
+                            <th>TYPE</th>
+                            <th>ROI</th>
+                            <th>W/L</th>
+                        </tr>
+                    </thead>
+                    <tbody id="agentStatsBody">
+                        <!-- Agent rows -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Center Top: Live Terminal -->
+        <div class="panel live-terminal">
+            <div class="panel-header">
+                <span>LIVE FEED // SYNDICATE WIRE</span>
+                <span>[P2]</span>
+            </div>
+
+            <!-- Active Game Header -->
+            <div id="gameHeader" class="game-header">
+                <div class="team-box">
+                    <span class="team-name" id="homeTeam">WAITING</span>
+                    <span class="team-odds" id="homeOdds">---</span>
+                </div>
+                <div class="vs-divider">VS</div>
+                <div class="team-box">
+                    <span class="team-name" id="awayTeam">FOR DATA</span>
+                    <span class="team-odds" id="awayOdds">---</span>
+                </div>
+            </div>
+
+            <div class="panel-content terminal-feed" id="terminalFeed" style="max-height: calc(100% - 120px);">
+                <div class="log-entry">
+                    <span class="log-time">SYSTEM</span>
+                    <span class="log-msg">Fixed Terminal initialized. League selection enabled...</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Panel: Order Book -->
+        <div class="panel order-book">
+            <div class="panel-header">
+                <span>ACTIVE ORDERS</span>
+                <span>[P3]</span>
+            </div>
+            <div class="panel-content">
+                <table style="margin-bottom: 10px;">
+                    <thead>
+                        <tr>
+                            <th>SIDE</th>
+                            <th>ASSET</th>
+                            <th>SIZE</th>
+                            <th>PRICE</th>
+                        </tr>
+                    </thead>
+                    <tbody id="orderBookBody">
+                        <!-- Bets go here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Center Bottom: Charts -->
+        <div class="panel chart-panel">
+            <div class="panel-header">
+                <span>EQUITY CURVE [1M]</span>
+                <span>[P4]</span>
+            </div>
+            <div class="panel-content" style="padding: 5px;">
+                <div id="mainChart" style="height: 100%; width: 100%;"></div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="loading-content">
+            <div class="spinner"></div>
+            <div style="color: var(--accent-green); font-size: 14px; margin-bottom: 10px;">FETCHING LEAGUES & AGENTS</div>
+            <div style="color: var(--text-secondary); font-size: 11px;">Connecting to data sources...</div>
+        </div>
+    </div>
+
+    <script>
+        // Socket Connection
+        const socket = io();
+
+        // Enhanced Configuration
+        let selectedLeagues = [];
+        let agentComposition = {
+            sharps: 3,
+            insiders: 2, 
+            degens: 3,
+            bookies: 2
+        };
+        let availableLeagues = [];
+
+        // Chart Setup
+        const chartOptions = {
+            series: [{ name: 'Equity', data: [{ x: 0, y: 10000 }] }],
+            chart: {
+                type: 'area',
+                height: '100%',
+                fontFamily: 'Roboto Mono, monospace',
+                background: '#000000',
+                toolbar: { show: false },
+                animations: { enabled: true, easing: 'linear', dynamicAnimation: { speed: 500 } }
+            },
+            colors: ['#00ff00'],
+            stroke: { curve: 'step', width: 2 },
+            fill: {
+                type: 'gradient',
+                gradient: { shadeIntensity: 1, opacityFrom: 0.3, opacityTo: 0.0, stops: [0, 100] }
+            },
+            dataLabels: { enabled: false },
+            grid: {
+                borderColor: '#333',
+                strokeDashArray: 2,
+                xaxis: { lines: { show: true } },
+                yaxis: { lines: { show: true } },
+            },
+            xaxis: {
+                labels: { style: { colors: '#888' } },
+                axisBorder: { show: false },
+                axisTicks: { show: false }
+            },
+            yaxis: {
+                labels: { style: { colors: '#888' } },
+                opposite: true
+            },
+            theme: { mode: 'dark' }
+        };
+
+        const chart = new ApexCharts(document.querySelector("#mainChart"), chartOptions);
+        chart.render();
+
+        // State
+        let bankrollData = [{ x: 0, y: 10000 }];
+        let gameCount = 0;
+
+        // FIXED: Better error handling and logging
+        function logSystem(msg) {
+            const feed = document.getElementById('terminalFeed');
+            if (!feed) return;
+            
+            const div = document.createElement('div');
+            div.className = 'log-entry';
+            const time = new Date().toLocaleTimeString('en-US', { hour12: false });
+            div.innerHTML = `
+                <span class="log-time">${time}</span>
+                <span class="log-agent" style="color: #555;">SYSTEM</span>
+                <span class="log-msg" style="color: #888;">${msg}</span>
+            `;
+            feed.appendChild(div);
+            feed.scrollTop = feed.scrollHeight;
+        }
+
+        function showLoading(show) {
+            const overlay = document.getElementById('loadingOverlay');
+            if (overlay) overlay.style.display = show ? 'flex' : 'none';
+        }
+
+        // FIXED: Better league fetching with error handling
+        function fetchAvailableLeagues() {
+            showLoading(true);
+            logSystem('Fetching available leagues...');
+            
+            const sport = document.getElementById('sportSelect').value;
+            logSystem(`Selected sport: ${sport}`);
+            
+            if (sport === 'multi') {
+                fetchAllLeagues();
+                return;
+            }
+            
+            // FIXED: Add error handling and timeout
+            fetch(`/api/leagues/${sport}`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    logSystem(`League API response: ${JSON.stringify(data).substring(0, 200)}...`);
+                    
+                    if (data.error) {
+                        logSystem(`League fetch error: ${data.error}`);
+                        loadSampleLeagues(sport);
+                    } else if (data.leagues && data.leagues.length > 0) {
+                        availableLeagues = data.leagues.map(league => ({
+                            name: league,
+                            sport: sport
+                        }));
+                        logSystem(`Found ${availableLeagues.length} leagues for ${sport}`);
+                        renderLeagueSelection();
+                    } else {
+                        logSystem(`No leagues found for ${sport}, using sample data`);
+                        loadSampleLeagues(sport);
+                    }
+                    showLoading(false);
+                })
+                .catch(error => {
+                    logSystem(`Failed to fetch leagues: ${error.message}`);
+                    logSystem('Falling back to sample leagues...');
+                    loadSampleLeagues(sport);
+                    showLoading(false);
+                });
+        }
+
+        function fetchAllLeagues() {
+            logSystem('Fetching leagues for all sports...');
+            
+            const sports = ['soccer', 'basketball', 'hockey', 'tennis'];
+            const leaguePromises = sports.map(sport => 
+                fetch(`/api/leagues/${sport}`)
+                    .then(response => {
+                        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                        return response.json();
+                    })
+                    .catch(error => {
+                        logSystem(`Error fetching ${sport}: ${error.message}`);
+                        return { leagues: [] }; // Return empty on error
+                    })
+            );
+
+            Promise.all(leaguePromises)
+                .then(results => {
+                    availableLeagues = [];
+                    results.forEach((data, index) => {
+                        if (data && data.leagues && data.leagues.length > 0) {
+                            availableLeagues.push(...data.leagues.map(league => ({
+                                name: league,
+                                sport: sports[index]
+                            })));
+                        }
+                    });
+                    logSystem(`Found ${availableLeagues.length} leagues across all sports`);
+                    renderLeagueSelection();
+                    showLoading(false);
+                })
+                .catch(error => {
+                    logSystem(`Failed to fetch multi-sport leagues: ${error.message}`);
+                    loadSampleLeagues('multi');
+                    showLoading(false);
+                });
+        }
+
+        function loadSampleLeagues(sport) {
+            logSystem(`Loading sample leagues for ${sport}...`);
+            
+            const sampleLeagues = {
+                soccer: [
+                    { name: "English Premier League", sport: "soccer" },
+                    { name: "Spanish La Liga", sport: "soccer" },
+                    { name: "German Bundesliga", sport: "soccer" },
+                    { name: "Italian Serie A", sport: "soccer" }
+                ],
+                basketball: [
+                    { name: "NBA", sport: "basketball" },
+                    { name: "EuroLeague", sport: "basketball" }
+                ],
+                hockey: [
+                    { name: "NHL", sport: "hockey" }
+                ],
+                tennis: [
+                    { name: "ATP Tour", sport: "tennis" },
+                    { name: "WTA Tour", sport: "tennis" }
+                ],
+                multi: [
+                    { name: "English Premier League", sport: "soccer" },
+                    { name: "Spanish La Liga", sport: "soccer" },
+                    { name: "NBA", sport: "basketball" },
+                    { name: "NHL", sport: "hockey" }
+                ]
+            };
+
+            availableLeagues = sampleLeagues[sport] || sampleLeagues.multi;
+            logSystem(`Loaded ${availableLeagues.length} sample leagues for ${sport}`);
+            renderLeagueSelection();
+        }
+
+        function renderLeagueSelection() {
+            const container = document.getElementById('leagueSelection');
+            if (!container) {
+                logSystem('ERROR: League selection container not found');
+                return;
+            }
+
+            logSystem(`Rendering ${availableLeagues.length} leagues...`);
+            
+            container.innerHTML = '<div class="league-grid">';
+            
+            if (availableLeagues.length === 0) {
+                container.innerHTML += '<div style="color: var(--text-secondary); text-align: center; padding: 20px;">No leagues available</div>';
+            }
+            
+            availableLeagues.forEach((league, index) => {
+                const leagueDiv = document.createElement('div');
+                leagueDiv.className = 'league-item';
+                leagueDiv.innerHTML = `
+                    <div class="league-name">${league.name}</div>
+                    <div class="league-info">${league.sport.toUpperCase()}</div>
+                `;
+                
+                // FIXED: Proper click event binding
+                leagueDiv.addEventListener('click', function() {
+                    toggleLeague(league.name, this);
+                });
+                
+                container.appendChild(leagueDiv);
+            });
+
+            container.innerHTML += '</div>';
+            
+            // FIXED: Restore previously selected leagues
+            selectedLeagues.forEach(leagueName => {
+                const leagueElement = container.querySelector(`[onclick*="${leagueName}"]`);
+                if (leagueElement) {
+                    leagueElement.classList.add('selected');
+                }
+            });
+            
+            logSystem(`League selection rendered with ${availableLeagues.length} items`);
+        }
+
+        function toggleLeague(leagueName, element) {
+            logSystem(`League clicked: ${leagueName}`);
+            
+            if (selectedLeagues.includes(leagueName)) {
+                selectedLeagues = selectedLeagues.filter(l => l !== leagueName);
+                element.classList.remove('selected');
+                logSystem(`Deselected: ${leagueName}`);
+            } else {
+                selectedLeagues.push(leagueName);
+                element.classList.add('selected');
+                logSystem(`Selected: ${leagueName}`);
+            }
+            
+            logSystem(`Selected leagues: ${selectedLeagues.join(', ')}`);
+        }
+
+        function updateAgentCount(type, delta) {
+            const newValue = Math.max(0, Math.min(5, agentComposition[type] + delta));
+            agentComposition[type] = newValue;
+            
+            const countElement = document.getElementById(`${type}Count`);
+            if (countElement) {
+                countElement.innerText = newValue;
+            }
+            
+            logSystem(`${type} count: ${newValue}`);
+        }
+
+        function startSimulation() {
+            logSystem('Starting simulation...');
+            
+            const numGames = parseInt(document.getElementById('numGames').value) || 10;
+            const bankroll = parseInt(document.getElementById('startingBankroll').value) || 10000;
+            const sport = document.getElementById('sportSelect').value;
+            const kelly = parseFloat(document.getElementById('kellyFraction').value) || 0.25;
+            const useLive = document.getElementById('useLiveData').checked;
+            
+            logSystem(`Config: ${numGames} games, €${bankroll} bankroll, Kelly: ${kelly}`);
+            logSystem(`Sport: ${sport}, Data: ${useLive ? 'LIVE' : 'SAMPLE'}`);
+            logSystem(`Selected leagues: ${selectedLeagues.length > 0 ? selectedLeagues.join(', ') : 'All available'}`);
+            
+            const totalAgents = Object.values(agentComposition).reduce((a, b) => a + b, 0);
+            logSystem(`Agent composition: ${totalAgents} total agents`);
+            
+            socket.emit('start_simulation', {
+                num_games: numGames,
+                starting_bankroll: bankroll,
+                sport: sport,
+                kelly_fraction: kelly,
+                use_live_data: useLive,
+                selected_leagues: selectedLeagues.length > 0 ? selectedLeagues : null,
+                agent_composition: agentComposition
+            });
+            
+            document.getElementById('stopBtn').style.display = 'inline-block';
+        }
+
+        function openConfig() {
+            logSystem('Opening configuration...');
+            document.getElementById('configModal').style.display = 'flex';
+            fetchAvailableLeagues();
+        }
+
+        function closeConfig() {
+            logSystem('Closing configuration');
+            document.getElementById('configModal').style.display = 'none';
+        }
+
+        function confirmConfig() {
+            logSystem('Confirming configuration');
+            closeConfig();
+            startSimulation();
+        }
+
+        function stopSimulation() {
+            logSystem('Stopping simulation...');
+            socket.emit('stop_simulation');
+            document.getElementById('stopBtn').style.display = 'none';
+        }
+
+        // FIXED: Better sport change handling
+        document.addEventListener('DOMContentLoaded', function() {
+            const sportSelect = document.getElementById('sportSelect');
+            if (sportSelect) {
+                sportSelect.addEventListener('change', function() {
+                    logSystem(`Sport changed to: ${this.value}`);
+                    // Clear previous selections when sport changes
+                    selectedLeagues = [];
+                    fetchAvailableLeagues();
+                });
+            } else {
+                logSystem('ERROR: Sport select element not found');
+            }
+        });
+
+        // Socket Events
+        socket.on('connect', () => {
+            logSystem('Connected to BBS Network Node.');
+            const led = document.getElementById('connLed');
+            if (led) led.classList.add('on');
+        });
+
+        socket.on('disconnect', () => {
+            logSystem('Connection lost. Reconnecting...');
+            const led = document.getElementById('connLed');
+            if (led) led.classList.remove('on');
+        });
+
+        socket.on('new_game', (game) => {
+            const homeTeam = document.getElementById('homeTeam');
+            const awayTeam = document.getElementById('awayTeam');
+            const homeOdds = document.getElementById('homeOdds');
+            const awayOdds = document.getElementById('awayOdds');
+            
+            if (homeTeam) homeTeam.innerText = game.home_team;
+            if (awayTeam) awayTeam.innerText = game.away_team;
+            if (homeOdds) homeOdds.innerText = game.home_odds;
+            if (awayOdds) awayOdds.innerText = game.away_odds;
+
+            logSystem(`MARKET OPEN: ${game.home_team} vs ${game.away_team} [${game.sport}]`);
+
+            // Blink feed LED
+            const led = document.getElementById('feedLed');
+            if (led) {
+                led.classList.add('on');
+                setTimeout(() => led.classList.remove('on'), 200);
+            }
+        });
+
+        socket.on('agent_message', (data) => {
+            const feed = document.getElementById('terminalFeed');
+            if (!feed) return;
+
+            const div = document.createElement('div');
+            div.className = 'log-entry';
+
+            const time = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+            let agentClass = '';
+            if (data.agent_type === 'sharp') agentClass = 'agent-sharp';
+            if (data.agent_type === 'insider') agentClass = 'agent-insider';
+            if (data.agent_type === 'degen') agentClass = 'agent-degen';
+            if (data.agent_type === 'bookie') agentClass = 'agent-bookie';
+
+            div.innerHTML = `
+                <span class="log-time">${time}</span>
+                <span class="log-agent ${agentClass}">${data.agent_name}</span>
+                <span class="log-msg">${data.response}</span>
+            `;
+
+            feed.appendChild(div);
+            feed.scrollTop = feed.scrollHeight;
+
+            if (data.decision) {
+                const decDiv = document.createElement('div');
+                decDiv.className = 'log-entry';
+                decDiv.innerHTML = `
+                    <span class="log-time">${time}</span>
+                    <span class="log-agent">>>></span>
+                    <span class="log-msg" style="color: var(--accent-green)">ORDER SUBMITTED: ${data.decision.bet_type} ${data.decision.team} @ ${data.decision.odds}</span>
+                `;
+                feed.appendChild(decDiv);
+                feed.scrollTop = feed.scrollHeight;
+            }
+        });
+
+        socket.on('new_bet', (bet) => {
+            const tbody = document.getElementById('orderBookBody');
+            if (!tbody) return;
+
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td style="display:flex; align-items:center;"><div class="order-side side-buy"></div> BUY</td>
+                <td>${bet.team}</td>
+                <td>€${bet.stake}</td>
+                <td style="color: var(--accent-green)">${bet.odds}</td>
+            `;
+            tbody.insertBefore(row, tbody.firstChild);
+
+            if (tbody.children.length > 15) tbody.removeChild(tbody.lastChild);
+        });
+
+        socket.on('notification', (data) => {
+            logSystem(`[${data.type.toUpperCase()}] ${data.message}`);
+        });
+
+        socket.on('stats_update', (data) => {
+            const bankroll = document.getElementById('bankroll');
+            const pnl = document.getElementById('pnl');
+            const roi = document.getElementById('roi');
+            const winRate = document.getElementById('winRate');
+            
+            if (bankroll) bankroll.innerText = `€${data.bankroll.toFixed(2)}`;
+            if (pnl) pnl.innerText = `€${data.pnl.toFixed(2)}`;
+            if (roi) roi.innerText = `${data.roi.toFixed(2)}%`;
+            if (winRate) winRate.innerText = `${data.win_rate.toFixed(1)}%`;
+        });
+
+        // FIXED: Prevent page from cutting off on content overflow
+        window.addEventListener('resize', function() {
+            // Adjust terminal scroll position on resize
+            const feed = document.getElementById('terminalFeed');
+            if (feed) feed.scrollTop = feed.scrollHeight;
+        });
+    </script>
+
+    <!-- FIXED: Better sized configuration modal -->
+    <div id="configModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 9999; justify-content: center; align-items: center;">
+        <div style="background: var(--panel-bg); border: 2px solid var(--accent-green); padding: 20px; min-width: 600px; max-width: 800px; max-height: 85vh; overflow-y: auto;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid var(--border-color); padding-bottom: 10px;">
+                <span style="color: var(--accent-green); font-weight: 700; font-size: 14px;">⚙️ ENHANCED SIMULATION CONFIG</span>
+                <button onclick="closeConfig()" style="background: none; border: none; color: var(--accent-red); cursor: pointer; font-size: 18px;">&times;</button>
+            </div>
+
+            <!-- Basic Settings -->
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; font-size: 10px; color: var(--text-secondary); margin-bottom: 5px;">NUMBER OF GAMES</label>
+                <input type="number" id="numGames" value="10" min="1" max="50"
+                       style="width: 100%; background: var(--bg-color); border: 1px solid var(--border-color); color: var(--text-primary); padding: 8px; font-family: var(--font-mono); font-size: 13px;">
+            </div>
+
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; font-size: 10px; color: var(--text-secondary); margin-bottom: 5px;">STARTING BANKROLL (€)</label>
+                <input type="number" id="startingBankroll" value="10000" min="1000" max="100000" step="1000"
+                       style="width: 100%; background: var(--bg-color); border: 1px solid var(--border-color); color: var(--text-primary); padding: 8px; font-family: var(--font-mono); font-size: 13px;">
+            </div>
+
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; font-size: 10px; color: var(--text-secondary); margin-bottom: 5px;">SPORT SELECTION</label>
+                <select id="sportSelect"
+                        style="width: 100%; background: var(--bg-color); border: 1px solid var(--border-color); color: var(--text-primary); padding: 8px; font-family: var(--font-mono); font-size: 13px;">
+                    <option value="soccer">⚽ Soccer / Football</option>
+                    <option value="basketball">🏀 Basketball</option>
+                    <option value="hockey">🏒 Ice Hockey</option>
+                    <option value="tennis">🎾 Tennis</option>
+                    <option value="multi">🎯 Multi-Sport Mix</option>
+                </select>
+            </div>
+
+            <!-- FIXED: League Selection -->
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; font-size: 10px; color: var(--text-secondary); margin-bottom: 5px;">LEAGUE SELECTION (Click to select)</label>
+                <div id="leagueSelection" class="league-selection">
+                    <div style="color: var(--text-secondary); font-size: 9px; margin-bottom: 5px;">
+                        ℹ️ Select specific leagues or leave empty for all available
+                    </div>
+                    <!-- Leagues will be loaded here -->
+                    <div style="color: var(--text-secondary); text-align: center; padding: 20px;">
+                        Loading leagues...
+                    </div>
+                </div>
+            </div>
+
+            <!-- FIXED: Agent Composition -->
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; font-size: 10px; color: var(--text-secondary); margin-bottom: 5px;">AGENT COMPOSITION</label>
+                <div class="agent-composition">
+                    <div class="agent-grid">
+                        <div class="agent-item">
+                            <div style="color: var(--accent-blue); font-weight: 700;">SHARP AGENTS</div>
+                            <div class="agent-count">
+                                <button onclick="updateAgentCount('sharps', -1)">-</button>
+                                <span id="sharpsCount">3</span>
+                                <button onclick="updateAgentCount('sharps', 1)">+</button>
+                            </div>
+                            <div style="font-size: 8px; color: var(--text-secondary);">Data-driven, EV focused</div>
+                        </div>
+                        <div class="agent-item">
+                            <div style="color: var(--accent-amber); font-weight: 700;">INSIDER AGENTS</div>
+                            <div class="agent-count">
+                                <button onclick="updateAgentCount('insiders', -1)">-</button>
+                                <span id="insidersCount">2</span>
+                                <button onclick="updateAgentCount('insiders', 1)">+</button>
+                            </div>
+                            <div style="font-size: 8px; color: var(--text-secondary);">Injury/news angles</div>
+                        </div>
+                        <div class="agent-item">
+                            <div style="color: var(--accent-red); font-weight: 700;">DEGEN AGENTS</div>
+                            <div class="agent-count">
+                                <button onclick="updateAgentCount('degens', -1)">-</button>
+                                <span id="degensCount">3</span>
+                                <button onclick="updateAgentCount('degens', 1)">+</button>
+                            </div>
+                            <div style="font-size: 8px; color: var(--text-secondary);">Chaos, superstitions</div>
+                        </div>
+                        <div class="agent-item">
+                            <div style="color: var(--accent-green); font-weight: 700;">BOOKIE AGENTS</div>
+                            <div class="agent-count">
+                                <button onclick="updateAgentCount('bookies', -1)">-</button>
+                                <span id="bookiesCount">2</span>
+                                <button onclick="updateAgentCount('bookies', 1)">+</button>
+                            </div>
+                            <div style="font-size: 8px; color: var(--text-secondary);">Market trapping</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; font-size: 10px; color: var(--text-secondary); margin-bottom: 5px;">KELLY FRACTION (Risk Level)</label>
+                <input type="range" id="kellyFraction" value="0.25" min="0.1" max="0.5" step="0.05"
+                       style="width: 100%;" oninput="document.getElementById('kellyValue').innerText = this.value">
+                <div style="display: flex; justify-content: space-between; font-size: 10px; margin-top: 3px;">
+                    <span style="color: var(--accent-green);">Conservative (0.1)</span>
+                    <span id="kellyValue" style="color: var(--accent-amber); font-weight: 700;">0.25</span>
+                    <span style="color: var(--accent-red);">Aggressive (0.5)</span>
+                </div>
+            </div>
+
+            <div style="margin-bottom: 20px;">
+                <label style="display: flex; align-items: center; font-size: 12px; color: var(--text-primary); cursor: pointer;">
+                    <input type="checkbox" id="useLiveData" style="margin-right: 8px; transform: scale(1.2);">
+                    <span>USE LIVE ODDS API</span>
+                </label>
+                <div style="font-size: 9px; color: var(--text-secondary); margin-top: 3px; margin-left: 24px;">
+                    ℹ️ Unchecked = Sample data (demo mode)
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 10px;">
+                <button onclick="confirmConfig()" class="action-btn primary" style="flex: 1; padding: 10px;">
+                    CONFIRM & START
+                </button>
+                <button onclick="closeConfig()" class="action-btn" style="flex: 0.4; padding: 10px;">
+                    CANCEL
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Socket Connection
+        const socket = io();
+
+        // Enhanced Configuration
+        let selectedLeagues = [];
+        let agentComposition = {
+            sharps: 3,
+            insiders: 2, 
+            degens: 3,
+            bookies: 2
+        };
+        let availableLeagues = [];
+
+        // Chart Setup
+        const chartOptions = {
+            series: [{ name: 'Equity', data: [{ x: 0, y: 10000 }] }],
+            chart: {
+                type: 'area',
+                height: '100%',
+                fontFamily: 'Roboto Mono, monospace',
+                background: '#000000',
+                toolbar: { show: false },
+                animations: { enabled: true, easing: 'linear', dynamicAnimation: { speed: 500 } }
+            },
+            colors: ['#00ff00'],
+            stroke: { curve: 'step', width: 2 },
+            fill: {
+                type: 'gradient',
+                gradient: { shadeIntensity: 1, opacityFrom: 0.3, opacityTo: 0.0, stops: [0, 100] }
+            },
+            dataLabels: { enabled: false },
+            grid: {
+                borderColor: '#333',
+                strokeDashArray: 2,
+                xaxis: { lines: { show: true } },
+                yaxis: { lines: { show: true } },
+            },
+            xaxis: {
+                labels: { style: { colors: '#888' } },
+                axisBorder: { show: false },
+                axisTicks: { show: false }
+            },
+            yaxis: {
+                labels: { style: { colors: '#888' } },
+                opposite: true
+            },
+            theme: { mode: 'dark' }
+        };
+
+        const chart = new ApexCharts(document.querySelector("#mainChart"), chartOptions);
+        chart.render();
+
+        // State
+        let bankrollData = [{ x: 0, y: 10000 }];
+        let gameCount = 0;
+
+        // FIXED: Better error handling and logging
+        function logSystem(msg) {
+            const feed = document.getElementById('terminalFeed');
+            if (!feed) return;
+            
+            const div = document.createElement('div');
+            div.className = 'log-entry';
+            const time = new Date().toLocaleTimeString('en-US', { hour12: false });
+            div.innerHTML = `
+                <span class="log-time">${time}</span>
+                <span class="log-agent" style="color: #555;">SYSTEM</span>
+                <span class="log-msg" style="color: #888;">${msg}</span>
+            `;
+            feed.appendChild(div);
+            feed.scrollTop = feed.scrollHeight;
+        }
+
+        function showLoading(show) {
+            const overlay = document.getElementById('loadingOverlay');
+            if (overlay) overlay.style.display = show ? 'flex' : 'none';
+        }
+
+        // FIXED: Better league fetching with error handling
+        function fetchAvailableLeagues() {
+            showLoading(true);
+            logSystem('Fetching available leagues...');
+            
+            const sport = document.getElementById('sportSelect').value;
+            logSystem(`Selected sport: ${sport}`);
+            
+            if (sport === 'multi') {
+                fetchAllLeagues();
+                return;
+            }
+            
+            // FIXED: Add error handling and timeout
+            fetch(`/api/leagues/${sport}`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    logSystem(`League API response: ${JSON.stringify(data).substring(0, 200)}...`);
+                    
+                    if (data.error) {
+                        logSystem(`League fetch error: ${data.error}`);
+                        loadSampleLeagues(sport);
+                    } else if (data.leagues && data.leagues.length > 0) {
+                        availableLeagues = data.leagues.map(league => ({
+                            name: league,
+                            sport: sport
+                        }));
+                        logSystem(`Found ${availableLeagues.length} leagues for ${sport}`);
+                        renderLeagueSelection();
+                    } else {
+                        logSystem(`No leagues found for ${sport}, using sample data`);
+                        loadSampleLeagues(sport);
+                    }
+                    showLoading(false);
+                })
+                .catch(error => {
+                    logSystem(`Failed to fetch leagues: ${error.message}`);
+                    logSystem('Falling back to sample leagues...');
+                    loadSampleLeagues(sport);
+                    showLoading(false);
+                });
+        }
+
+        function fetchAllLeagues() {
+            logSystem('Fetching leagues for all sports...');
+            
+            const sports = ['soccer', 'basketball', 'hockey', 'tennis'];
+            const leaguePromises = sports.map(sport => 
+                fetch(`/api/leagues/${sport}`)
+                    .then(response => {
+                        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                        return response.json();
+                    })
+                    .catch(error => {
+                        logSystem(`Error fetching ${sport}: ${error.message}`);
+                        return { leagues: [] }; // Return empty on error
+                    })
+            );
+
+            Promise.all(leaguePromises)
+                .then(results => {
+                    availableLeagues = [];
+                    results.forEach((data, index) => {
+                        if (data && data.leagues && data.leagues.length > 0) {
+                            availableLeagues.push(...data.leagues.map(league => ({
+                                name: league,
+                                sport: sports[index]
+                            })));
+                        }
+                    });
+                    logSystem(`Found ${availableLeagues.length} leagues across all sports`);
+                    renderLeagueSelection();
+                    showLoading(false);
+                })
+                .catch(error => {
+                    logSystem(`Failed to fetch multi-sport leagues: ${error.message}`);
+                    loadSampleLeagues('multi');
+                    showLoading(false);
+                });
+        }
+
+        function loadSampleLeagues(sport) {
+            logSystem(`Loading sample leagues for ${sport}...`);
+            
+            const sampleLeagues = {
+                soccer: [
+                    { name: "English Premier League", sport: "soccer" },
+                    { name: "Spanish La Liga", sport: "soccer" },
+                    { name: "German Bundesliga", sport: "soccer" },
+                    { name: "Italian Serie A", sport: "soccer" }
+                ],
+                basketball: [
+                    { name: "NBA", sport: "basketball" },
+                    { name: "EuroLeague", sport: "basketball" }
+                ],
+                hockey: [
+                    { name: "NHL", sport: "hockey" }
+                ],
+                tennis: [
+                    { name: "ATP Tour", sport: "tennis" },
+                    { name: "WTA Tour", sport: "tennis" }
+                ],
+                multi: [
+                    { name: "English Premier League", sport: "soccer" },
+                    { name: "Spanish La Liga", sport: "soccer" },
+                    { name: "NBA", sport: "basketball" },
+                    { name: "NHL", sport: "hockey" }
+                ]
+            };
+
+            availableLeagues = sampleLeagues[sport] || sampleLeagues.multi;
+            logSystem(`Loaded ${availableLeagues.length} sample leagues for ${sport}`);
+            renderLeagueSelection();
+        }
+
+        function renderLeagueSelection() {
+            const container = document.getElementById('leagueSelection');
+            if (!container) {
+                logSystem('ERROR: League selection container not found');
+                return;
+            }
+
+            logSystem(`Rendering ${availableLeagues.length} leagues...`);
+            
+            container.innerHTML = '<div class="league-grid">';
+            
+            if (availableLeagues.length === 0) {
+                container.innerHTML += '<div style="color: var(--text-secondary); text-align: center; padding: 20px;">No leagues available</div>';
+            }
+            
+            availableLeagues.forEach((league, index) => {
+                const leagueDiv = document.createElement('div');
+                leagueDiv.className = 'league-item';
+                leagueDiv.innerHTML = `
+                    <div class="league-name">${league.name}</div>
+                    <div class="league-info">${league.sport.toUpperCase()}</div>
+                `;
+                
+                // FIXED: Proper click event binding
+                leagueDiv.addEventListener('click', function() {
+                    toggleLeague(league.name, this);
+                });
+                
+                container.appendChild(leagueDiv);
+            });
+
+            container.innerHTML += '</div>';
+            
+            // FIXED: Restore previously selected leagues
+            selectedLeagues.forEach(leagueName => {
+                const leagueElement = container.querySelector(`[onclick*="${leagueName}"]`);
+                if (leagueElement) {
+                    leagueElement.classList.add('selected');
+                }
+            });
+            
+            logSystem(`League selection rendered with ${availableLeagues.length} items`);
+        }
+
+        function toggleLeague(leagueName, element) {
+            logSystem(`League clicked: ${leagueName}`);
+            
+            if (selectedLeagues.includes(leagueName)) {
+                selectedLeagues = selectedLeagues.filter(l => l !== leagueName);
+                element.classList.remove('selected');
+                logSystem(`Deselected: ${leagueName}`);
+            } else {
+                selectedLeagues.push(leagueName);
+                element.classList.add('selected');
+                logSystem(`Selected: ${leagueName}`);
+            }
+            
+            logSystem(`Selected leagues: ${selectedLeagues.join(', ')}`);
+        }
+
+        function updateAgentCount(type, delta) {
+            const newValue = Math.max(0, Math.min(5, agentComposition[type] + delta));
+            agentComposition[type] = newValue;
+            
+            const countElement = document.getElementById(`${type}Count`);
+            if (countElement) {
+                countElement.innerText = newValue;
+            }
+            
+            logSystem(`${type} count: ${newValue}`);
+        }
+
+        function startSimulation() {
+            logSystem('Starting simulation...');
+            
+            const numGames = parseInt(document.getElementById('numGames').value) || 10;
+            const bankroll = parseInt(document.getElementById('startingBankroll').value) || 10000;
+            const sport = document.getElementById('sportSelect').value;
+            const kelly = parseFloat(document.getElementById('kellyFraction').value) || 0.25;
+            const useLive = document.getElementById('useLiveData').checked;
+            
+            logSystem(`Config: ${numGames} games, €${bankroll} bankroll, Kelly: ${kelly}`);
+            logSystem(`Sport: ${sport}, Data: ${useLive ? 'LIVE' : 'SAMPLE'}`);
+            logSystem(`Selected leagues: ${selectedLeagues.length > 0 ? selectedLeagues.join(', ') : 'All available'}`);
+            
+            const totalAgents = Object.values(agentComposition).reduce((a, b) => a + b, 0);
+            logSystem(`Agent composition: ${totalAgents} total agents`);
+            
+            socket.emit('start_simulation', {
+                num_games: numGames,
+                starting_bankroll: bankroll,
+                sport: sport,
+                kelly_fraction: kelly,
+                use_live_data: useLive,
+                selected_leagues: selectedLeagues.length > 0 ? selectedLeagues : null,
+                agent_composition: agentComposition
+            });
+            
+            document.getElementById('stopBtn').style.display = 'inline-block';
+        }
+
+        function openConfig() {
+            logSystem('Opening configuration...');
+            document.getElementById('configModal').style.display = 'flex';
+            fetchAvailableLeagues();
+        }
+
+        function closeConfig() {
+            logSystem('Closing configuration');
+            document.getElementById('configModal').style.display = 'none';
+        }
+
+        function confirmConfig() {
+            logSystem('Confirming configuration');
+            closeConfig();
+            startSimulation();
+        }
+
+        function stopSimulation() {
+            logSystem('Stopping simulation...');
+            socket.emit('stop_simulation');
+            document.getElementById('stopBtn').style.display = 'none';
+        }
+
+        // FIXED: Better sport change handling
+        document.addEventListener('DOMContentLoaded', function() {
+            const sportSelect = document.getElementById('sportSelect');
+            if (sportSelect) {
+                sportSelect.addEventListener('change', function() {
+                    logSystem(`Sport changed to: ${this.value}`);
+                    // Clear previous selections when sport changes
+                    selectedLeagues = [];
+                    fetchAvailableLeagues();
+                });
+            } else {
+                logSystem('ERROR: Sport select element not found');
+            }
+        });
+
+        // Socket Events
+        socket.on('connect', () => {
+            logSystem('Connected to BBS Network Node.');
+            const led = document.getElementById('connLed');
+            if (led) led.classList.add('on');
+        });
+
+        socket.on('disconnect', () => {
+            logSystem('Connection lost. Reconnecting...');
+            const led = document.getElementById('connLed');
+            if (led) led.classList.remove('on');
+        });
+
+        socket.on('new_game', (game) => {
+            const homeTeam = document.getElementById('homeTeam');
+            const awayTeam = document.getElementById('awayTeam');
+            const homeOdds = document.getElementById('homeOdds');
+            const awayOdds = document.getElementById('awayOdds');
+            
+            if (homeTeam) homeTeam.innerText = game.home_team;
+            if (awayTeam) awayTeam.innerText = game.away_team;
+            if (homeOdds) homeOdds.innerText = game.home_odds;
+            if (awayOdds) awayOdds.innerText = game.away_odds;
+
+            logSystem(`MARKET OPEN: ${game.home_team} vs ${game.away_team} [${game.sport}]`);
+
+            // Blink feed LED
+            const led = document.getElementById('feedLed');
+            if (led) {
+                led.classList.add('on');
+                setTimeout(() => led.classList.remove('on'), 200);
+            }
+        });
+
+        socket.on('agent_message', (data) => {
+            const feed = document.getElementById('terminalFeed');
+            if (!feed) return;
+
+            const div = document.createElement('div');
+            div.className = 'log-entry';
+
+            const time = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+            let agentClass = '';
+            if (data.agent_type === 'sharp') agentClass = 'agent-sharp';
+            if (data.agent_type === 'insider') agentClass = 'agent-insider';
+            if (data.agent_type === 'degen') agentClass = 'agent-degen';
+            if (data.agent_type === 'bookie') agentClass = 'agent-bookie';
+
+            div.innerHTML = `
+                <span class="log-time">${time}</span>
+                <span class="log-agent ${agentClass}">${data.agent_name}</span>
+                <span class="log-msg">${data.response}</span>
+            `;
+
+            feed.appendChild(div);
+            feed.scrollTop = feed.scrollHeight;
+
+            if (data.decision) {
+                const decDiv = document.createElement('div');
+                decDiv.className = 'log-entry';
+                decDiv.innerHTML = `
+                    <span class="log-time">${time}</span>
+                    <span class="log-agent">>>></span>
+                    <span class="log-msg" style="color: var(--accent-green)">ORDER SUBMITTED: ${data.decision.bet_type} ${data.decision.team} @ ${data.decision.odds}</span>
+                `;
+                feed.appendChild(decDiv);
+                feed.scrollTop = feed.scrollHeight;
+            }
+        });
+
+        socket.on('new_bet', (bet) => {
+            const tbody = document.getElementById('orderBookBody');
+            if (!tbody) return;
+
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td style="display:flex; align-items:center;"><div class="order-side side-buy"></div> BUY</td>
+                <td>${bet.team}</td>
+                <td>€${bet.stake}</td>
+                <td style="color: var(--accent-green)">${bet.odds}</td>
+            `;
+            tbody.insertBefore(row, tbody.firstChild);
+
+            if (tbody.children.length > 15) tbody.removeChild(tbody.lastChild);
+        });
+
+        socket.on('notification', (data) => {
+            logSystem(`[${data.type.toUpperCase()}] ${data.message}`);
+        });
+
+        socket.on('stats_update', (data) => {
+            const bankroll = document.getElementById('bankroll');
+            const pnl = document.getElementById('pnl');
+            const roi = document.getElementById('roi');
+            const winRate = document.getElementById('winRate');
+            
+            if (bankroll) bankroll.innerText = `€${data.bankroll.toFixed(2)}`;
+            if (pnl) pnl.innerText = `€${data.pnl.toFixed(2)}`;
+            if (roi) roi.innerText = `${data.roi.toFixed(2)}%`;
+            if (winRate) winRate.innerText = `${data.win_rate.toFixed(1)}%`;
+        });
+
+        // FIXED: Prevent page from cutting off on content overflow
+        window.addEventListener('resize', function() {
+            // Adjust terminal scroll position on resize
+            const feed = document.getElementById('terminalFeed');
+            if (feed) feed.scrollTop = feed.scrollHeight;
+        });
+    </script>
+
+    <!-- FIXED: Better sized configuration modal -->
+    <div id="configModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 9999; justify-content: center; align-items: center;">
+        <div style="background: var(--panel-bg); border: 2px solid var(--accent-green); padding: 20px; min-width: 600px; max-width: 800px; max-height: 85vh; overflow-y: auto;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid var(--border-color); padding-bottom: 10px;">
+                <span style="color: var(--accent-green); font-weight: 700; font-size: 14px;">⚙️ ENHANCED SIMULATION CONFIG</span>
+                <button onclick="closeConfig()" style="background: none; border: none; color: var(--accent-red); cursor: pointer; font-size: 18px;">&times;</button>
+            </div>
+
+            <!-- Basic Settings -->
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; font-size: 10px; color: var(--text-secondary); margin-bottom: 5px;">NUMBER OF GAMES</label>
+                <input type="number" id="numGames" value="10" min="1" max="50"
+                       style="width: 100%; background: var(--bg-color); border: 1px solid var(--border-color); color: var(--text-primary); padding: 8px; font-family: var(--font-mono); font-size: 13px;">
+            </div>
+
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; font-size: 10px; color: var(--text-secondary); margin-bottom: 5px;">STARTING BANKROLL (€)</label>
+                <input type="number" id="startingBankroll" value="10000" min="1000" max="100000" step="1000"
+                       style="width: 100%; background: var(--bg-color); border: 1px solid var(--border-color); color: var(--text-primary); padding: 8px; font-family: var(--font-mono); font-size: 13px;">
+            </div>
+
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; font-size: 10px; color: var(--text-secondary); margin-bottom: 5px;">SPORT SELECTION</label>
+                <select id="sportSelect"
+                        style="width: 100%; background: var(--bg-color); border: 1px solid var(--border-color); color: var(--text-primary); padding: 8px; font-family: var(--font-mono); font-size: 13px;">
+                    <option value="soccer">⚽ Soccer / Football</option>
+                    <option value="basketball">🏀 Basketball</option>
+                    <option value="hockey">🏒 Ice Hockey</option>
+                    <option value="tennis">🎾 Tennis</option>
+                    <option value="multi">🎯 Multi-Sport Mix</option>
+                </select>
+            </div>
+
+            <!-- FIXED: League Selection -->
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; font-size: 10px; color: var(--text-secondary); margin-bottom: 5px;">LEAGUE SELECTION (Click to select)</label>
+                <div id="leagueSelection" class="league-selection">
+                    <div style="color: var(--text-secondary); font-size: 9px; margin-bottom: 5px;">
+                        ℹ️ Select specific leagues or leave empty for all available
+                    </div>
+                    <!-- Leagues will be loaded here -->
+                    <div style="color: var(--text-secondary); text-align: center; padding: 20px;">
+                        Loading leagues...
+                    </div>
+                </div>
+            </div>
+
+            <!-- FIXED: Agent Composition -->
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; font-size: 10px; color: var(--text-secondary); margin-bottom: 5px;">AGENT COMPOSITION</label>
+                <div class="agent-composition">
+                    <div class="agent-grid">
+                        <div class="agent-item">
+                            <div style="color: var(--accent-blue); font-weight: 700;">SHARP AGENTS</div>
+                            <div class="agent-count">
+                                <button onclick="updateAgentCount('sharps', -1)">-</button>
+                                <span id="sharpsCount">3</span>
+                                <button onclick="updateAgentCount('sharps', 1)">+</button>
+                            </div>
+                            <div style="font-size: 8px; color: var(--text-secondary);">Data-driven, EV focused</div>
+                        </div>
+                        <div class="agent-item">
+                            <div style="color: var(--accent-amber); font-weight: 700;">INSIDER AGENTS</div>
+                            <div class="agent-count">
+                                <button onclick="updateAgentCount('insiders', -1)">-</button>
+                                <span id="insidersCount">2</span>
+                                <button onclick="updateAgentCount('insiders', 1)">+</button>
+                            </div>
+                            <div style="font-size: 8px; color: var(--text-secondary);">Injury/news angles</div>
+                        </div>
+                        <div class="agent-item">
+                            <div style="color: var(--accent-red); font-weight: 700;">DEGEN AGENTS</div>
+                            <div class="agent-count">
+                                <button onclick="updateAgentCount('degens', -1)">-</button>
+                                <span id="degensCount">3</span>
+                                <button onclick="updateAgentCount('degens', 1)">+</button>
+                            </div>
+                            <div style="font-size: 8px; color: var(--text-secondary);">Chaos, superstitions</div>
+                        </div>
+                        <div class="agent-item">
+                            <div style="color: var(--accent-green); font-weight: 700;">BOOKIE AGENTS</div>
+                            <div class="agent-count">
+                                <button onclick="updateAgentCount('bookies', -1)">-</button>
+                                <span id="bookiesCount">2</span>
+                                <button onclick="updateAgentCount('bookies', 1)">+</button>
+                            </div>
+                            <div style="font-size: 8px; color: var(--text-secondary);">Market trapping</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; font-size: 10px; color: var(--text-secondary); margin-bottom: 5px;">KELLY FRACTION (Risk Level)</label>
+                <input type="range" id="kellyFraction" value="0.25" min="0.1" max="0.5" step="0.05"
+                       style="width: 100%;" oninput="document.getElementById('kellyValue').innerText = this.value">
+                <div style="display: flex; justify-content: space-between; font-size: 10px; margin-top: 3px;">
+                    <span style="color: var(--accent-green);">Conservative (0.1)</span>
+                    <span id="kellyValue" style="color: var(--accent-amber); font-weight: 700;">0.25</span>
+                    <span style="color: var(--accent-red);">Aggressive (0.5)</span>
+                </div>
+            </div>
+
+            <div style="margin-bottom: 20px;">
+                <label style="display: flex; align-items: center; font-size: 12px; color: var(--text-primary); cursor: pointer;">
+                    <input type="checkbox" id="useLiveData" style="margin-right: 8px; transform: scale(1.2);">
+                    <span>USE LIVE ODDS API</span>
+                </label>
+                <div style="font-size: 9px; color: var(--text-secondary); margin-top: 3px; margin-left: 24px;">
+                    ℹ️ Unchecked = Sample data (demo mode)
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 10px;">
+                <button onclick="confirmConfig()" class="action-btn primary" style="flex: 1; padding: 10px;">
+                    CONFIRM & START
+                </button>
+                <button onclick="closeConfig()" class="action-btn" style="flex: 0.4; padding: 10px;">
+                    CANCEL
+                </button>
+            </div>
+        </div>
+    </div>
+
+</body>
+
+</html>

@@ -17,7 +17,7 @@ from datetime import datetime
 from typing import Dict, Any, List
 
 from data.odds_aggregator import OddsAggregator
-from simulation.graph import SyndicateGraph
+from simulation.graph import SyndicateGraph, evaluate_simulation_bets
 from agents.base_agent import Game
 from database.schema import (
     SessionLocal, Simulation, Bet, AgentSimulationStats,
@@ -128,16 +128,97 @@ class DashboardMonitor:
 
     def show_separator(self):
         """Emit a separator (optional, maybe just a log line or ignored)."""
-        # For the web dashboard, we might not need a visual separator, 
+        # For the web dashboard, we might not need a visual separator,
         # or we could emit a specific event if we wanted to draw a line.
         # For now, we'll just log a small break or ignore it to prevent errors.
         pass
+
+    def show_bet_evaluation(self, evaluation: Dict):
+        """Emit bet evaluation results to dashboard."""
+        self.socketio.emit('bet_evaluation', {
+            'total_bets': evaluation.get('total_bets', 0),
+            'matched_bets': evaluation.get('matched_bets', 0),
+            'unmatched_bets': evaluation.get('unmatched_bets', 0),
+            'wins': evaluation.get('wins', 0),
+            'losses': evaluation.get('losses', 0),
+            'win_rate': evaluation.get('win_rate', 0.0),
+            'total_staked': evaluation.get('total_staked', 0.0),
+            'total_profit_loss': evaluation.get('total_profit_loss', 0.0),
+            'roi': evaluation.get('roi', 0.0),
+            'bet_results': [
+                {
+                    'home_team': bet.home_team,
+                    'away_team': bet.away_team,
+                    'bet_type': bet.bet_type,
+                    'odds': bet.odds,
+                    'stake': bet.stake,
+                    'actual_home_score': bet.actual_home_score,
+                    'actual_away_score': bet.actual_away_score,
+                    'won': bet.won,
+                    'profit_loss': bet.profit_loss
+                }
+                for bet in evaluation.get('bet_results', [])
+            ]
+        })
 
 
 # Global game index
 game_index = 0
 
-def run_simulation_background(num_games=1):
+
+def normalize_league_name(league: str) -> str:
+    """Normalize league name for comparison.
+
+    Handles both:
+    - Original format: "ENGLAND: Premier League"
+    - Pre-normalized format: "england_ premier_league"
+    - Scraper format: "england_ premier_league" (with non-breaking spaces)
+    """
+    if not league:
+        return ""
+
+    # Convert to string and lowercase
+    normalized = str(league).lower()
+    
+    # Explicitly replace non-breaking spaces and colons
+    normalized = normalized.replace('\xa0', '_').replace(':', '')
+
+    # Replace spaces and hyphens with underscores
+    import re
+    normalized = re.sub(r'[\s\-_]+', '_', normalized)
+
+    # Strip leading/trailing underscores
+    return normalized.strip("_")
+
+
+def filter_games_by_leagues(games: List[Game], selected_leagues: List[str]) -> List[Game]:
+    """Filter games by selected league names.
+
+    Args:
+        games: List of Game objects
+        selected_leagues: List of league names (can be normalized or original format)
+
+    Returns:
+        Filtered list of games matching the selected leagues
+    """
+    if not selected_leagues or not games:
+        return games
+
+    # Normalize the selected league names
+    normalized_selected = {normalize_league_name(league) for league in selected_leagues}
+
+    # Filter games
+    filtered = []
+    for game in games:
+        if hasattr(game, 'league') and game.league:
+            normalized_game_league = normalize_league_name(game.league)
+            if normalized_game_league in normalized_selected:
+                filtered.append(game)
+
+    return filtered
+
+
+def run_simulation_background(num_games=1, starting_bankroll=10000, kelly_fraction=0.25, sport="multi", use_live_data=True, selected_leagues=None):
     """Run simulation in background and emit events."""
     global current_simulation, game_index
 
@@ -146,7 +227,7 @@ def run_simulation_background(num_games=1):
 
     try:
         current_simulation['running'] = True
-        
+
         # Create user if not exists (for web dashboard)
         user_email = "web_dashboard@bratislava.local"
         user = db.query(User).filter(User.email == user_email).first()
@@ -164,10 +245,10 @@ def run_simulation_background(num_games=1):
             id=simulation_id,
             user_id=user.id,
             num_games=num_games,
-            starting_bankroll=10000,
-            kelly_fraction=0.25,
-            sport="multi-sport",
-            use_live_data=True,
+            starting_bankroll=starting_bankroll,
+            kelly_fraction=kelly_fraction,
+            sport=sport if sport != "multi" else "multi-sport",
+            use_live_data=use_live_data,
             status="in_progress",
             created_at=datetime.utcnow()
         )
@@ -176,19 +257,77 @@ def run_simulation_background(num_games=1):
 
         current_simulation['simulation_id'] = simulation_id
 
-        # Fetch games
-        aggregator = OddsAggregator()
-        games = aggregator.get_all_odds()
+        # Fetch games - use live Flashscore scraper or sample data
+        from data.sample_games import get_sample_games, get_available_leagues
+        from data.odds_aggregator import OddsAggregator
+
+        if use_live_data:
+            print(f"📊 Using LIVE data from Flashscore")
+            print(f"  Sport requested: {sport}")
+
+            # Get live games from Flashscore via aggregator
+            aggregator = OddsAggregator()
+            all_games = aggregator.get_all_odds(sport=sport)
+            print(f"  Total live games: {len(all_games)}")
+        else:
+            print(f"📊 Using sample data mode")
+            print(f"  Sport requested: {sport}")
+            print(f"  Use live data: {use_live_data}")
+
+            # Get all sample games
+            all_games = get_sample_games()
+            print(f"  Total sample games: {len(all_games)}")
+
+        # Filter by sport if not multi
+        if sport != 'multi':
+            all_games = [g for g in all_games if g.sport == sport]
+            print(f"  After sport filter ({sport}): {len(all_games)}")
+            if all_games:
+                sport_leagues = set(g.league for g in all_games if hasattr(g, 'league') and g.league)
+                # Debug log available leagues
+                print(f"  Leagues available: {sorted(list(sport_leagues))[:5]}...")
+
+        # Filter by leagues if specified
+        if selected_leagues:
+            print(f"  Leagues requested: {selected_leagues}")
+            print(f"  Games before league filter: {len(all_games)}")
+            
+            # DEBUG: Show some available leagues to debug matching
+            available = set(g.league for g in all_games if hasattr(g, 'league'))
+            
+            all_games = filter_games_by_leagues(all_games, selected_leagues)
+            print(f"  After league filter: {len(all_games)}")
+
+            # Show which leagues were found
+            found_leagues = set(g.league for g in all_games if g.league)
+            print(f"  Leagues found in filtered games: {sorted(found_leagues)}")
+            if all_games:
+                print(f"  Found {len(all_games)} games for simulation")
+
+        games = all_games
 
         if not games:
+            msg = f'No {sport} games available'
+            if selected_leagues:
+                normalized_sel = [normalize_league_name(l) for l in selected_leagues]
+                msg += f' in selected leagues: {", ".join(selected_leagues)}'
+                # Add helpful debug info to console/log
+                print(f"❌ DEBUG: Requested normalized: {normalized_sel}")
+                if 'available' in locals() and available:
+                    normalized_avail = [normalize_league_name(l) for l in list(available)[:5]]
+                    print(f"❌ DEBUG: Available normalized (sample): {normalized_avail}")
+            
+            print(f"❌ {msg}")
             socketio.emit('notification', {
                 'type': 'error',
-                'message': 'No games available'
+                'message': msg
             })
             simulation.status = 'failed'
-            simulation.error_message = 'No games available'
+            simulation.error_message = msg
             db.commit()
             return
+
+        print(f"  Final game count: {len(games)}")
         
         # Create monitor
         monitor = DashboardMonitor(socketio)
@@ -202,7 +341,8 @@ def run_simulation_background(num_games=1):
             search_client = None
         
         # Run simulation
-        syndicate = SyndicateGraph()
+        # Fix: Pass sport to SyndicateGraph so it creates correct agents
+        syndicate = SyndicateGraph(sport=sport)
         syndicate.monitor = monitor
         
         for i in range(num_games):
@@ -338,7 +478,7 @@ def run_simulation_background(num_games=1):
                     # Real Mode: Wait for actual score
                     # In a real deployment, we would save the bet to a DB and check later.
                     # For now, we just log it.
-                    monitor.log_event("INFO", "Real Mode: Bet placed. Waiting for match result...")
+                    print("Real Mode: Bet placed. Waiting for match result...")
                     is_win = None # Pending
                 
                 # Update Bankroll Manager
@@ -458,8 +598,70 @@ def run_simulation_background(num_games=1):
             # Pause between games
             socketio.sleep(3)
 
-        # Mark simulation as completed
-        simulation.status = 'awaiting_results'  # Waiting for real results to come in
+        # Evaluate bets against actual results
+        monitor.show_success("🎯 Evaluating bets against actual match results...")
+
+        # Get all bets from this simulation
+        sim_bets = db.query(Bet).filter(Bet.simulation_id == simulation_id).all()
+
+        if sim_bets:
+            # Convert database bets to evaluation format
+            bets_for_evaluation = []
+            for bet in sim_bets:
+                # Determine bet_type based on bet_team
+                if bet.bet_team == bet.game_home_team:
+                    bet_type = 'home'
+                elif bet.bet_team == bet.game_away_team:
+                    bet_type = 'away'
+                else:
+                    bet_type = 'draw'
+
+                bets_for_evaluation.append({
+                    'id': bet.id,
+                    'home_team': bet.game_home_team,
+                    'away_team': bet.game_away_team,
+                    'bet_type': bet_type,
+                    'odds': bet.odds,
+                    'stake': bet.stake
+                })
+
+            # Evaluate bets (this fetches finished matches from Flashscore)
+            evaluation = evaluate_simulation_bets(
+                [{'home_team': b['home_team'], 'away_team': b['away_team'],
+                  'prediction': b['bet_type'], 'odds': b['odds'], 'stake': b['stake'],
+                  'game_id': b['id']} for b in bets_for_evaluation],
+                sport=sport if sport != 'multi' else 'soccer',
+                monitor=monitor
+            )
+
+            if evaluation:
+                # Emit evaluation results to dashboard
+                monitor.show_bet_evaluation(evaluation)
+
+                # Update bet records with actual results
+                for bet_result in evaluation.get('bet_results', []):
+                    # Find matching bet in database
+                    for db_bet in sim_bets:
+                        if (db_bet.game_home_team == bet_result.home_team and
+                            db_bet.game_away_team == bet_result.away_team):
+                            # Update bet with actual result
+                            db_bet.result_status = 'won' if bet_result.won else 'lost'
+                            db_bet.profit_loss = bet_result.profit_loss  # Using existing column
+                            db_bet.home_score = bet_result.actual_home_score  # Using existing column
+                            db_bet.away_score = bet_result.actual_away_score  # Using existing column
+                            db_bet.result_fetched_at = datetime.utcnow()
+                            break
+
+                db.commit()
+
+                monitor.show_success(f"✅ Evaluation complete! {evaluation['wins']}W-{evaluation['losses']}L | ROI: {evaluation['roi']:+.1f}%")
+                simulation.status = 'completed'  # All results evaluated
+            else:
+                monitor.show_warning("⚠️  Could not evaluate bets - no finished matches found")
+                simulation.status = 'awaiting_results'  # Still waiting for real results
+        else:
+            simulation.status = 'completed'  # No bets to evaluate
+
         simulation.duration_seconds = int((datetime.utcnow() - simulation.created_at).total_seconds())
         db.commit()
 
@@ -486,6 +688,30 @@ def run_simulation_background(num_games=1):
 def index():
     """Serve the dashboard."""
     return render_template('dashboard.html')
+
+
+@app.route('/enhanced')
+def enhanced():
+    """Serve the enhanced dashboard with league selection and agent composition."""
+    return render_template('enhanced_dashboard.html')
+
+
+@app.route('/fixed')
+def fixed():
+    """Serve the fixed dashboard with working league selection and scroll fixes."""
+    return render_template('fixed_dashboard.html')
+
+
+@app.route('/scrollable')
+def scrollable():
+    """Serve the scrollable dashboard with proper terminal scrolling."""
+    return render_template('scrollable_dashboard.html')
+
+
+@app.route('/ultimate')
+def ultimate():
+    """Serve the ultimate dashboard with working league selection and scrollable terminal."""
+    return render_template('ultimate_dashboard.html')
 
 
 @app.route('/api/status')
@@ -551,6 +777,30 @@ def status():
             db.close()
 
     return jsonify(current_simulation)
+
+
+@app.route('/api/leagues/<sport>')
+def get_available_leagues(sport):
+    """Get available leagues for a sport by fetching live games."""
+    try:
+        from data.odds_aggregator import OddsAggregator
+
+        aggregator = OddsAggregator()
+        games = aggregator.get_all_odds(sport=sport)
+
+        # Extract unique leagues
+        leagues = set()
+        for game in games:
+            if hasattr(game, 'league') and game.league:
+                leagues.add(game.league)
+
+        return jsonify({
+            'sport': sport,
+            'leagues': sorted(list(leagues)),
+            'total_games': len(games)
+        })
+    except Exception as e:
+        return jsonify({'error': str(e), 'leagues': []}), 500
 
 
 @app.route('/api/simulations/latest')
@@ -642,21 +892,47 @@ def handle_start_simulation(data):
             'message': 'Simulation already running'
         })
         return
-    
-    num_games = data.get('num_games', 5)
-    
+
+    # Extract configuration from frontend
+    num_games = data.get('num_games', 10)
+    starting_bankroll = data.get('starting_bankroll', 10000)
+    kelly_fraction = data.get('kelly_fraction', 0.25)
+    sport = data.get('sport', 'multi')
+    use_live_data = data.get('use_live_data', True)
+    selected_leagues = data.get('selected_leagues', None)  # List of league names
+
     # Run in background thread
-    thread = threading.Thread(target=run_simulation_background, args=(num_games,))
+    thread = threading.Thread(
+        target=run_simulation_background,
+        args=(num_games, starting_bankroll, kelly_fraction, sport, use_live_data, selected_leagues)
+    )
     thread.daemon = True
     thread.start()
-    
+
     emit('notification', {
         'type': 'success',
-        'message': f'Starting simulation with {num_games} games...'
+        'message': f'Starting simulation: {num_games} games, €{starting_bankroll} bankroll, Kelly: {kelly_fraction}'
+    })
+
+
+@socketio.on('stop_simulation')
+def handle_stop_simulation():
+    """Stop the current simulation."""
+    if not current_simulation['running']:
+        emit('notification', {
+            'type': 'warning',
+            'message': 'No simulation running'
+        })
+        return
+
+    current_simulation['running'] = False
+    emit('notification', {
+        'type': 'info',
+        'message': 'Simulation stopped'
     })
 
 
 if __name__ == '__main__':
     print("🎰 Starting Bratislava Betting Syndicate Dashboard...")
-    print("📊 Dashboard: http://localhost:5000")
-    socketio.run(app, host='0.0.0.0', port=5000, debug=True, allow_unsafe_werkzeug=True)
+    print("📊 Dashboard: http://localhost:8508")
+    socketio.run(app, host='0.0.0.0', port=8508, debug=False, allow_unsafe_werkzeug=True)
